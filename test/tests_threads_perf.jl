@@ -1,4 +1,3 @@
-using CUDA
 import JACC
 using Test
 
@@ -6,6 +5,7 @@ using Test
 @testset "perf-AXPY" begin
 
     N = 300_000_000
+    ntimes = 6
     x = round.(rand(Float32, N) * 100)
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
@@ -21,7 +21,7 @@ using Test
         return nothing
     end
 
-    for i in 1:11
+    for i in 1:ntimes
         @time axpy_threads(N, alpha, x, y)
     end
 
@@ -32,7 +32,7 @@ using Test
         end
     end
 
-    for i in 1:11
+    for i in 1:ntimes
         @time JACC.parallel_for(N, axpy, alpha, x_JACC, y_JACC)
     end
 end
