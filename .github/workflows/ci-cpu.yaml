@@ -1,0 +1,44 @@
+name: ci-cpu
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        jobname: [JACC-threads]
+
+    steps:
+      - name: Checkout Action
+        uses: actions/checkout@v3
+
+      - name: Instantiate
+        run: julia --project -e 'using Pkg; Pkg.instantiate();'
+
+      - name: Test Threads
+        run: julia --project -e 'using Pkg; Pkg.test()'
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        jobname: [JACC-threads]
+
+    steps:
+      - name: Checkout Action
+        uses: actions/checkout@v3
+
+      - name: Instantiate
+        run: julia --project -e 'using Pkg; Pkg.instantiate();'
+
+      - name: Test Threads
+        run: julia --project -e 'using Pkg; Pkg.test()'

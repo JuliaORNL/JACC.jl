@@ -9,12 +9,12 @@ export parallel_for
 global Array
 
 function parallel_for(N::I, f::F, x...) where {I<:Integer,F<:Function}
-    Threads.@threads for i in 1:N
-        f(i, x...)
-    end
+  Threads.@threads for i in 1:N
+    f(i, x...)
+  end
 end
 
-function parallel_for((M, N)::Tuple(I,I), f::F, x...) where {I<:Integer,F<:Function}
+function parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   Threads.@sync Threads.@threads for i in 1:N
     for j in 1:M
       f(i, j, x...)
@@ -26,7 +26,7 @@ function parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   tmp = zeros(Threads.nthreads())
   ret = zeros(1)
   Threads.@threads for i in 1:N
-    tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i,x...)
+    tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, x...)
   end
   for i in 1:Threads.nthreads()
     ret = ret .+ tmp[i]
@@ -34,7 +34,7 @@ function parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   return ret
 end
 
-function parallel_reduce((M, N)::Tuple(I,I), f::F, x...) where {I<:Integer,F<:Function}
+function parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   tmp = zeros(Threads.nthreads())
   ret = zeros(1)
   Threads.@threads for i in 1:N
@@ -49,11 +49,11 @@ function parallel_reduce((M, N)::Tuple(I,I), f::F, x...) where {I<:Integer,F<:Fu
 end
 
 function __init__()
-    @info("Using JACC backend: $(JACCPreferences.backend)")
+  @info("Using JACC backend: $(JACCPreferences.backend)")
 
-    if JACCPreferences.backend == "threads"
-        const JACC.Array = Base.Array{T,N} where {T,N}
-    end
+  if JACCPreferences.backend == "threads"
+    const JACC.Array = Base.Array{T,N} where {T,N}
+  end
 end
 
 
