@@ -87,43 +87,33 @@ end
     p = p * 0.5
     global cond = one(Float64)
 
-    da0 = JACC.Array(a0)   
-    da1 = JACC.Array(a1)   
-    da2 = JACC.Array(a2)   
-    dr = JACC.Array(r)   
-    dp = JACC.Array(p)   
-    ds = JACC.Array(s)   
-    dx = JACC.Array(x)   
-    dr_old = JACC.Array(r_old)   
-    dr_aux = JACC.Array(r_aux)   
-      
     while cond[1,1] >= 1e-14
 
-        dr_old = copy(dr)
+        r_old = copy(r)
 
-        JACC.parallel_for(SIZE,matvecmul,da0,da1,da2,dp,ds,SIZE)
+        JACC.parallel_for(SIZE,matvecmul,a0,a1,a2,p,s,SIZE)
 
-        alpha0 = JACC.parallel_reduce(SIZE,dot,dr,dr)
-        alpha1 = JACC.parallel_reduce(SIZE,dot,dp,ds)
+        alpha0 = JACC.parallel_reduce(SIZE,dot,r,r)
+        alpha1 = JACC.parallel_reduce(SIZE,dot,p,s)
 
         alpha = alpha0 / alpha1
         negative_alpha = alpha * (-1.0)
 
-        JACC.parallel_for(SIZE,axpy,negative_alpha,dr,ds)
-        JACC.parallel_for(SIZE,axpy,alpha,dx,dp)
+        JACC.parallel_for(SIZE,axpy,negative_alpha,r,s)
+        JACC.parallel_for(SIZE,axpy,alpha,x,p)
 
-        beta0 = JACC.parallel_reduce(SIZE,dot,dr,dr)
-        beta1 = JACC.parallel_reduce(SIZE,dot,dr_old,dr_old)
+        beta0 = JACC.parallel_reduce(SIZE,dot,r,r)
+        beta1 = JACC.parallel_reduce(SIZE,dot,r_old,r_old)
         beta = beta0 / beta1
 
-        dr_aux = copy(dr)
+        r_aux = copy(r)
 
-        JACC.parallel_for(SIZE,axpy,beta,dr_aux,p)
-        ccond = JACC.parallel_reduce(SIZE,dot,dr,dr)
+        JACC.parallel_for(SIZE,axpy,beta,r_aux,p)
+        ccond = JACC.parallel_reduce(SIZE,dot,r,r)
         global cond = ccond
-        dp = copy(dr_aux)
+        p = copy(r_aux)
 
-        #println(cond)
+        println(cond)
 
     end
     @test cond <= 1e-14
