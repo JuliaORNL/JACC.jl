@@ -116,5 +116,5 @@ end
         println(cond)
 
     end
-    @test cond <= 1e-14
+    @test cond[1,1] <= 1e-14
 end
