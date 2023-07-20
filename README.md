@@ -1,2 +1,2 @@
 # JACC.jl
-CPU/GPU performance portable layer in Julia via functions as arguments
+CPU/GPU performance portable layer for Julia
