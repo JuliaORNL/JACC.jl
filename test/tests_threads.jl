@@ -224,7 +224,7 @@ end
     dcy = JACC.Array(cy)
     dw  = JACC.Array(w)
 
-    parallel_for((SIZE,SIZE),lbm_kernel,df,df1,df2,t,dw,dcx,dcy,SIZE)
+    JACC.parallel_for((SIZE,SIZE),lbm_kernel,df,df1,df2,t,dw,dcx,dcy,SIZE)
 
     lbm_threads(f,f1,f2,t,w,cx,cy,SIZE)
 
