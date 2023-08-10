@@ -23,7 +23,7 @@ function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 512
   threads = min(N, numThreads)
   ret = CUDA.zeros(1)
-  CUDA.@sync @cuda threads = threads blocks = 1 shmem = 512 * sizeof(Float64) parallel_reduce_cuda(N, ret, f, x...)
+  CUDA.@sync @cuda threads = threads blocks = 1 shmem = 512 * sizeof(Float64) _parallel_reduce_cuda(N, ret, f, x...)
   return ret[1]
 end
 
@@ -33,7 +33,7 @@ function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,
   Mthreads = min(M, numThreads)
   Nthreads = min(N, numThreads)
   ret = CUDA.zeros(1)
-  CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = 1 shmem = 16 * 16 * sizeof(Float64) parallel_reduce_cuda_MN((M, N), ret, f, x...)
+  CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = 1 shmem = 16 * 16 * sizeof(Float64) _parallel_reduce_cuda_MN((M, N), ret, f, x...)
   return ret[1]
 end
 
@@ -105,7 +105,7 @@ function _parallel_reduce_cuda(N, ret, f, x...)
 end
 
 
-function parallel_reduce_cuda_MN((M, N), ret, f, x...)
+function _parallel_reduce_cuda_MN((M, N), ret, f, x...)
   shared_mem = @cuDynamicSharedMem(Float64, 16, 16)
 
   i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
