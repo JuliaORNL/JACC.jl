@@ -56,7 +56,7 @@ function _parallel_reduce_cuda(N, ret, f, x...)
   ii = i
   tmp::Float64 = 0.0
   if N > 512
-    while ii < N
+    while ii <= N
       tmp += f(ii, x...)
       ii += 512
     end
