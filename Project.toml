@@ -1,6 +1,6 @@
 name = "JACC"
 uuid = "0979c8fe-16a4-4796-9b82-89a9f10403ea"
-authors = ["pedrovalerolara <valerolarap@ornl.com>", "williamfgc <williamfgc@yahoo.com>"]
+authors = ["pedrovalerolara <valerolarap@ornl.gov>", "williamfgc <williamfgc@yahoo.com>"]
 version = "0.0.1"
 
 [deps]
