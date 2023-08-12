@@ -1,7 +1,7 @@
 name = "JACC"
 uuid = "0979c8fe-16a4-4796-9b82-89a9f10403ea"
 authors = ["pedrovalerolara <valerolarap@ornl.com>", "williamfgc <williamfgc@yahoo.com>"]
-version = "0.1.0"
+version = "0.0.1"
 
 [deps]
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
@@ -18,6 +18,10 @@ JACCCUDA = ["CUDA"]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+julia = "1.9.0"
+Preferences = "1.4.0"
 
 [targets]
 test = ["AMDGPU", "CUDA", "Test"]
