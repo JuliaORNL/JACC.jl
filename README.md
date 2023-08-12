@@ -37,3 +37,5 @@ JACC.parallel_for(N, axpy, alpha, x_d, y_d)
 
 We currently have a limited number of configurations. 
 We hope to study and incoorporate more relevant cases and dimensions shapes as needed.
+
+Funded by the Exascale Computing Project (ECP) [PROTEAS-TUNE](https://www.ornl.gov/project/proteas-tune) and the [ASCR Bluestone](https://csmd.ornl.gov/Bluestone) projects.
