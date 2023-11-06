@@ -7,7 +7,7 @@ using Preferences
 function set_backend(new_backend::String)
 
     new_backend_lc = lowercase(new_backend)
-    if !(new_backend_lc in ("threads", "cuda", "amdgpu"))
+    if !(new_backend_lc in ("threads", "cuda", "amdgpu", "oneapi"))
         throw(ArgumentError("Invalid backend: \"$(new_backend)\""))
     end
 
