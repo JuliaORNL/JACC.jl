@@ -9,19 +9,22 @@ Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
 
 [extensions]
 JACCAMDGPU = ["AMDGPU"]
 JACCCUDA = ["CUDA"]
+JACCONEAPI = ["oneAPI"]
+
+[compat]
+Preferences = "1.4.0"
+julia = "1.9.0"
 
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-[compat]
-julia = "1.9.0"
-Preferences = "1.4.0"
-
 [targets]
-test = ["AMDGPU", "CUDA", "Test"]
+test = ["AMDGPU", "CUDA", "oneAPI", "Test"]

@@ -1,0 +1,10 @@
+
+module JACCONEAPI
+
+using JACC, oneAPI
+
+function __init__()
+  const JACC.Array = oneAPI.oneArray{T,N} where {T,N}
+end
+
+end # module JACCONEAPI
