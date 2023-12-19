@@ -5,7 +5,7 @@ on:
     types: [created]
 
 jobs:
-  sulfur-cpu:
+  gpu-rtxA4000:
     if: |
       github.repository_owner == 'JuliaORNL' &&
       github.event.issue.pull_request &&
