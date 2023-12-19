@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [RTXA4000-CUDA12_3-JULIA1_9_4-CUDAJL5_1_1]
+        jobname: [CUDA12_3-JULIA1_9_4-CUDAJL5_1_1]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
@@ -71,10 +71,9 @@ jobs:
           repository: ${{fromJson(steps.request.outputs.data).head.repo.full_name}}
           ref: ${{steps.pr_data.outputs.branch}}
 
-      - name: Configure
+      - name: Instantiate
         if: steps.check.outputs.triggered == 'true'
-        run: cd ${GITHUB_WORKSPACE} |
-          julia --project -e 'using Pkg; Pkg.instantiate()' |
+        run: julia --project -e 'using Pkg; Pkg.instantiate()' |
           julia --project -e 'using Pkg; Pkg.add(name="CUDA", version="v5.1.1")' |
           julia --project -e 'using CUDA; CUDA.set_runtime_version!(local_toolkit=true)' |
           julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("CUDA")'
