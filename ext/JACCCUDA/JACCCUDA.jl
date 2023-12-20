@@ -106,13 +106,14 @@ end
 
 
 function _parallel_reduce_cuda_MN((M, N), ret, f, x...)
-  shared_mem = @cuDynamicSharedMem(Float64, 16, 16)
+  shared_mem = @cuDynamicSharedMem(Float64, 16 * 16)
 
   i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
   j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
   ii = i
   jj = j
 
+  shared_mem[((i-1)*16)+j] = 0.0
   tmp::Float64 = 0.0
 
   if M > 16 && N > 16
@@ -134,34 +135,36 @@ function _parallel_reduce_cuda_MN((M, N), ret, f, x...)
       tmp += @inbounds f(ii, jj, x...)
       jj += 16
     end
-  else
-    tmp = f(i, j, x...)
+  elseif M <= 16 && N <= 16
+    if i <= M && j <= N
+      tmp = @inbounds f(i, j, x...)
+    end
   end
-  shared_mem[i, j] = tmp
+  shared_mem[(i-1)*16+j] = tmp
   sync_threads()
-  if (i <= 8 && j <= 8)
-    shared_mem[i, j] += shared_mem[i+8, j+8]
-    shared_mem[i, j] += shared_mem[i, j+8]
-    shared_mem[i, j] += shared_mem[i+8, j]
-  end
-  sync_threads()
-  if (i <= 4 && j <= 4)
-    shared_mem[i, j] += shared_mem[i+4, j+4]
-    shared_mem[i, j] += shared_mem[i, j+4]
-    shared_mem[i, j] += shared_mem[i+4, j]
+  if (i <= 8 && j <= 8 && i+8 < M && j+8 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+(j+8)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+8)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+j]
   end
   sync_threads()
-  if (i <= 2 && j <= 2)
-    shared_mem[i, j] += shared_mem[i+2, j+2]
-    shared_mem[i, j] += shared_mem[i, j+2]
-    shared_mem[i, j] += shared_mem[i+2, j]
+  if (i <= 4 && j <= 4 && i+4 < M && j+4 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+(j+4)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+4)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+j]
   end
   sync_threads()
-  if (i == 1 && j == 1)
-    shared_mem[i, j] += shared_mem[i+1, j+1]
-    shared_mem[i, j] += shared_mem[i, j+1]
-    shared_mem[i, j] += shared_mem[i+1, j]
-    ret[1] += shared_mem[i, j]
+  if (i <= 2 && j <= 2 && i+2 < M && j+2 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+(j+2)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+2)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+j]
+  end
+  sync_threads()
+  if (i == 1 && j == 1 && i+1 < M && j+1 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+(j+1)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+1)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+j]
+    ret[1] = shared_mem[((i-1)*16)+j]
   end
   return nothing
 end
