@@ -17,13 +17,13 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:
   Nitems = min(N, maxPossibleItems)
   Mgroups = ceil(Int, M / Mitems)
   Ngroups = ceil(Int, N / Nitems)
-  oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = (Mgroups, Ngroups) _parallel_for_openapi_MN(f, x...)
+  oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = (Mgroups, Ngroups) _parallel_for_oneapi_MN(f, x...)
 end
 
 function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   numItems = 256
   items = min(N, numItems)
-  ret = oneAPI.zeros(1)
+  ret = oneAPI.zeros(Float32, 1)
   oneAPI.@sync @oneapi items = items groups = 1 _parallel_reduce_oneapi(N, ret, f, x...)
   return ret[1]
 end
@@ -33,7 +33,7 @@ function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,
   numItems = 16
   Mitems = min(M, numItems)
   Nitems = min(N, numItems)
-  ret = oneAPI.zeros(1)
+  ret = oneAPI.zeros(Float32, 1)
   oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = 1 _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
   return ret[1]
 end
@@ -51,10 +51,12 @@ function _parallel_for_oneapi_MN(f, x...)
   return nothing
 end
 
-function _parallel_reduce_cuda(N, ret, f, x...)
+function _parallel_reduce_oneapi(N, ret, f, x...)
+  #shared_mem = oneLocalArray(Float32, 256)
   shared_mem = oneLocalArray(Float64, 256)
   i = get_global_id()
   ii = i
+  #tmp::Float32 = 0.0
   tmp::Float64 = 0.0
   if N > 256
     while ii <= N
@@ -102,14 +104,16 @@ function _parallel_reduce_cuda(N, ret, f, x...)
 end
 
 
-function _parallel_reduce_cuda_MN((M, N), ret, f, x...)
-  shared_mem = oneLocalArray(Float64, 16, 16)
+function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
+  #shared_mem = oneLocalArray(Float32, 16 * 16)
+  shared_mem = oneLocalArray(Float64, 16 * 16)
 
   i = get_global_id(0)
   j = get_global_id(1)
   ii = i
   jj = j
 
+  #tmp::Float32 = 0.0
   tmp::Float64 = 0.0
 
   if M > 16 && N > 16
@@ -131,34 +135,36 @@ function _parallel_reduce_cuda_MN((M, N), ret, f, x...)
       tmp += @inbounds f(ii, jj, x...)
       jj += 16
     end
-  else
-    tmp = f(i, j, x...)
+  else M <= 16 && N <= 16
+    if i <= M && j <= N
+      tmp = f(i, j, x...)
+    end
   end
-  shared_mem[i, j] = tmp
-  sync_threads()
-  if (i <= 8 && j <= 8)
-    shared_mem[i, j] += shared_mem[i+8, j+8]
-    shared_mem[i, j] += shared_mem[i, j+8]
-    shared_mem[i, j] += shared_mem[i+8, j]
+  shared_mem[(i-1)*16+j] = tmp
+  barrier() 
+  if (i <= 8 && j <= 8 && i+8 <= M && j+8 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+(j+8)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+8)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+j]
   end
-  sync_threads()
-  if (i <= 4 && j <= 4)
-    shared_mem[i, j] += shared_mem[i+4, j+4]
-    shared_mem[i, j] += shared_mem[i, j+4]
-    shared_mem[i, j] += shared_mem[i+4, j]
+  barrier() 
+  if (i <= 4 && j <= 4 && i+4 <= M && j+4 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+(j+4)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+4)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+j]
   end
-  sync_threads()
-  if (i <= 2 && j <= 2)
-    shared_mem[i, j] += shared_mem[i+2, j+2]
-    shared_mem[i, j] += shared_mem[i, j+2]
-    shared_mem[i, j] += shared_mem[i+2, j]
+  barrier() 
+  if (i <= 2 && j <= 2 && i+2 <= M && j+2 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+(j+2)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+2)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+j]
   end
-  sync_threads()
-  if (i == 1 && j == 1)
-    shared_mem[i, j] += shared_mem[i+1, j+1]
-    shared_mem[i, j] += shared_mem[i, j+1]
-    shared_mem[i, j] += shared_mem[i+1, j]
-    ret[1] += shared_mem[i, j]
+  barrier() 
+  if (i == 1 && j == 1 && i+1 <= M && j+1 <= N)
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+(j+1)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+1)]
+    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+j]
+    ret[1] = shared_mem[((i-1)*16)+j]
   end
   return nothing
 end
