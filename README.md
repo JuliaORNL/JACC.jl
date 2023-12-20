@@ -1,4 +1,9 @@
 # JACC.jl
+
+[![CI-CPU](https://github.com/JuliaORNL/JACC.jl/blob/main/.github/workflows/ci-cpu.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/blob/main/.github/workflows/ci-cpu.yaml)
+[![CI-GPU](https://github.com/JuliaORNL/JACC.jl/blob/main/.github/workflows/ci-gpu-ornl.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/blob/main/.github/workflows/ci-gpu-ornl.yaml)
+
+
 CPU/GPU performance portable layer for Julia
 
 JACC.jl follows a function as a argument approach in combination with the power of Julia's ecosystem for multiple dispatch, GPU back end access, and weak dependencies since Julia v1.9 . Similar to portable layers like Kokkos, users would pass a size and a function including its arguments to a `parallel_for` or `parallel_reduce` function.
