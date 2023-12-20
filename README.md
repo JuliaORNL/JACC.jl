@@ -1,8 +1,7 @@
 # JACC.jl
 
-[![CI-CPU](https://github.com/JuliaORNL/JACC.jl/.github/workflows/ci-cpu.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/.github/workflows/ci-cpu.yaml)
-[![CI-GPU](https://github.com/JuliaORNL/JACC.jl/.github/workflows/ci-gpu-ornl.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/.github/workflows/ci-gpu-ornl.yaml)
-
+[![CI-CPU](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml)
+[![CI-GPU](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-ornl.yaml/badge.svg)]((https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-ornl.yaml)
 
 CPU/GPU performance portable layer for Julia
 
