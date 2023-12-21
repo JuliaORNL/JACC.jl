@@ -23,11 +23,13 @@ end
 function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   numItems = 256
   items = min(N, numItems)
-  ret = oneAPI.zeros(Float32, 1)
-  oneAPI.@sync @oneapi items = items groups = 1 _parallel_reduce_oneapi(N, ret, f, x...)
-  return ret[1]
+  groups = ceil(Int, N/items)
+  ret = oneAPI.zeros(Float32, groups)
+  rret = oneAPI.zeros(Float32, 1)
+  oneAPI.@sync @oneapi items = items groups = groups _parallel_reduce_oneapi(N, ret, f, x...)
+  oneAPI.@sync @oneapi items = items groups = 1 reduce_kernel_oneapi(N, ret, rret)
+  return rret
 end
-
 
 function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   numItems = 16
@@ -54,17 +56,66 @@ end
 function _parallel_reduce_oneapi(N, ret, f, x...)
   #shared_mem = oneLocalArray(Float32, 256)
   shared_mem = oneLocalArray(Float64, 256)
+  i = get_global_id(0)
+  ti = get_local_id(0)
+  #tmp::Float32 = 0.0
+  tmp::Float64 = 0.0
+  shared_mem[ti] = 0.0
+  if i <= N
+    tmp = @inbounds f(i, x...)
+    shared_mem[ti] = tmp
+    barrier() 
+  end
+  if (ti <= 128)
+    shared_mem[ti] += shared_mem[ti+128]
+  end
+  barrier() 
+  if (ti <= 64)
+    shared_mem[ti] += shared_mem[ti+64]
+  end
+  barrier() 
+  if (ti <= 32)
+    shared_mem[ti] += shared_mem[ti+32]
+  end
+  barrier() 
+  if (ti <= 16)
+    shared_mem[ti] += shared_mem[ti+16]
+  end
+  barrier() 
+  if (ti <= 8)
+    shared_mem[ti] += shared_mem[ti+8]
+  end
+  barrier() 
+  if (ti <= 4)
+    shared_mem[ti] += shared_mem[ti+4]
+  end
+  barrier() 
+  if (ti <= 2)
+    shared_mem[ti] += shared_mem[ti+2]
+  end
+  barrier() 
+  if (ti == 1)
+    shared_mem[ti] += shared_mem[ti+1]
+    ret[get_group_id(0)] = shared_mem[ti]
+  end
+  barrier() 
+  return nothing
+end
+
+function reduce_kernel_oneapi(N, red, ret)
+  #shared_mem = oneLocalArray(Float32, 256)
+  shared_mem = oneLocalArray(Float64, 256)
   i = get_global_id()
   ii = i
   #tmp::Float32 = 0.0
   tmp::Float64 = 0.0
   if N > 256
     while ii <= N
-      tmp += f(ii, x...)
+      tmp += @inbounds red[ii]
       ii += 256
     end
   else
-    tmp = f(i, x...)
+    tmp = @inbounds red[i]
   end
   shared_mem[i] = tmp
   barrier() 
@@ -98,23 +149,20 @@ function _parallel_reduce_oneapi(N, ret, f, x...)
   barrier() 
   if (i == 1)
     shared_mem[i] += shared_mem[i+1]
-    ret[1] = shared_mem[i]
+    ret[1] = shared_mem[1]
   end
   return nothing
 end
 
-
 function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
-  #shared_mem = oneLocalArray(Float32, 16 * 16)
-  shared_mem = oneLocalArray(Float64, 16 * 16)
+  shared_mem = oneLocalArray(Float32, 16 * 16)
 
   i = get_global_id(0)
   j = get_global_id(1)
   ii = i
   jj = j
 
-  #tmp::Float32 = 0.0
-  tmp::Float64 = 0.0
+  tmp::Float32 = 0.0
 
   if M > 16 && N > 16
     while ii <= M
