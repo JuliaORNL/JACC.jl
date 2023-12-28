@@ -35,9 +35,13 @@ function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,
   numItems = 16
   Mitems = min(M, numItems)
   Nitems = min(N, numItems)
-  ret = oneAPI.zeros(Float32, 1)
-  oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = 1 _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
-  return ret[1]
+  Mgroups = ceil(Int, M/Mitems)
+  Ngroups = ceil(Int, N/Nitems)
+  ret = oneAPI.zeros(Float32,(Mgroups, Ngroups))
+  rret = oneAPI.zeros(Float32,1)
+  oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = (Mgroups, Ngroups) _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
+  oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = (1, 1) reduce_kernel_oneapi_MN((Mgroups, Ngroups), ret, rret)
+  return rret
 end
 
 function _parallel_for_oneapi(f, x...)
@@ -64,8 +68,8 @@ function _parallel_reduce_oneapi(N, ret, f, x...)
   if i <= N
     tmp = @inbounds f(i, x...)
     shared_mem[ti] = tmp
-    barrier() 
   end
+  barrier() 
   if (ti <= 128)
     shared_mem[ti] += shared_mem[ti+128]
   end
@@ -155,68 +159,139 @@ function reduce_kernel_oneapi(N, red, ret)
 end
 
 function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
-  shared_mem = oneLocalArray(Float32, 16 * 16)
-
+  #shared_mem = oneLocalArray(Float32, 16 * 16)
+  shared_mem = oneLocalArray(Float64, 16 * 16)
   i = get_global_id(0)
   j = get_global_id(1)
+  ti = get_local_id(0)
+  tj = get_local_id(1)
+  bi = get_group_id(0)
+  bj = get_group_id(1)
+
+  #tmp::Float32 = 0.0
+  tmp::Float64 = 0.0
+  shared_mem[((ti-1)*16)+tj] = tmp
+
+  if (i <= M && j <= N)
+    tmp = @inbounds f(i, j, x...)
+    shared_mem[(ti-1)*16+tj] = tmp
+  end
+  barrier()
+  if (ti <= 8 && tj <= 8 && ti+8 <= M && tj+8 <= N)
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+7)*16)+(tj+8)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti-1)*16)+(tj+8)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+7)*16)+tj]
+  end
+  barrier()
+  if (ti <= 4 && tj <= 4 && ti+4 <= M && tj+4 <= N)
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+3)*16)+(tj+4)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti-1)*16)+(tj+4)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+3)*16)+tj]
+  end
+  barrier()
+  if (ti <= 2 && tj <= 2 && ti+2 <= M && tj+2 <= N)
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+1)*16)+(tj+2)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti-1)*16)+(tj+2)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti+1)*16)+tj]
+  end
+  barrier()
+  if (ti == 1 && tj == 1 && ti+1 <= M && tj+1 <= N)
+    shared_mem[((ti-1)*16)+tj] += shared_mem[ti*16+(tj+1)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[((ti-1)*16)+(tj+1)]
+    shared_mem[((ti-1)*16)+tj] += shared_mem[ti*16+tj]
+    ret[bi,bj] = shared_mem[((ti-1)*16)+tj]
+  end
+  return nothing
+end
+
+function reduce_kernel_oneapi_MN((M, N), red, ret)
+  #shared_mem = oneLocalArray(Float32, 16 * 16)
+  shared_mem = oneLocalArray(Float64, 16 * 16)
+  i = get_local_id(0)
+  j = get_local_id(1)
   ii = i
   jj = j
 
-  tmp::Float32 = 0.0
-
+  #tmp::Float32 = 0.0
+  tmp::Float64 = 0.0
+  shared_mem[(i-1)*16+j] = tmp
+  
   if M > 16 && N > 16
     while ii <= M
-      jj = get_global_id(1)
+      jj = get_local_id(1)
       while jj <= N
-        tmp += @inbounds f(ii, jj, x...)
+        tmp = tmp + @inbounds red[ii,jj]
         jj += 16
       end
       ii += 16
     end
   elseif M > 16
     while ii <= N
-      tmp += @inbounds f(ii, jj, x...)
+      tmp = tmp + @inbounds red[ii,jj]
       ii += 16
     end
   elseif N > 16
     while jj <= N
-      tmp += @inbounds f(ii, jj, x...)
+      tmp = tmp + @inbounds red[ii,jj]
       jj += 16
     end
-  else M <= 16 && N <= 16
+  elseif M <= 16 && N <= 16
     if i <= M && j <= N
-      tmp = f(i, j, x...)
+      tmp = tmp + @inbounds red[i,j]
     end
   end
   shared_mem[(i-1)*16+j] = tmp
-  barrier() 
-  if (i <= 8 && j <= 8 && i+8 <= M && j+8 <= N)
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+(j+8)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+8)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+7)*16)+j]
+  barrier()
+  if (i <= 8 && j <= 8)
+    if (i+8 <= M && j+8 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+7)*16)+(j+8)]
+    end
+    if (i <= M && j+8 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i-1)*16)+(j+8)]
+    end
+    if (i+8 <= M && j <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+7)*16)+j]
+    end
   end
-  barrier() 
-  if (i <= 4 && j <= 4 && i+4 <= M && j+4 <= N)
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+(j+4)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+4)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+3)*16)+j]
+  barrier()
+  if (i <= 4 && j <= 4)
+    if (i+4 <= M && j+4 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+3)*16)+(j+4)]
+    end
+    if (i <= M && j+4 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i-1)*16)+(j+4)]
+    end
+    if (i+4 <= M && j <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+3)*16)+j]
+    end
   end
-  barrier() 
-  if (i <= 2 && j <= 2 && i+2 <= M && j+2 <= N)
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+(j+2)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+2)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i+1)*16)+j]
+  barrier()
+  if (i <= 2 && j <= 2)
+    if (i+2 <= M && j+2 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+1)*16)+(j+2)]
+    end
+    if (i <= M && j+2 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i-1)*16)+(j+2)]
+    end
+    if (i+2 <= M && j <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i+1)*16)+j]
+    end
   end
-  barrier() 
-  if (i == 1 && j == 1 && i+1 <= M && j+1 <= N)
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+(j+1)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[((i-1)*16)+(j+1)]
-    shared_mem[((i-1)*16)+j] = shared_mem[((i-1)*16)+j] + shared_mem[i*16+j]
-    ret[1] = shared_mem[((i-1)*16)+j]
+  barrier()
+  if (i == 1 && j == 1)
+    if (i+1 <= M && j+1 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[i*16+(j+1)]
+    end
+    if (i <= M && j+1 <= N)
+      shared_mem[((i-1)*16)+j] += shared_mem[((i-1)*16)+(j+1)]
+    end
+    if (i+1 <= M && j <= N)  
+      shared_mem[((i-1)*16)+j] += shared_mem[i*16+j]
+    end
+    ret[1] = shared_mem[((i-1)*16)+j] 
   end
   return nothing
 end
-
 
 function __init__()
   const JACC.Array = oneAPI.oneArray{T,N} where {T,N}
