@@ -1,17 +1,17 @@
-name: ci-gpu-ornl
+name: ci-gpu-amd-ornl
 
 on:
   issue_comment:
     types: [created]
 
 jobs:
-  gpu-rtxA4000:
+  excl-cousteau-MI100:
     if: |
       github.repository_owner == 'JuliaORNL' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
-    runs-on: [self-hosted, Linux, X64, ci-wfg-ornl-rtxA4000-1]
+    runs-on: [self-hosted, Linux, X64, ci-excl-cousteau-MI100-1]
 
     env:
       GH_JOBNAME: ${{matrix.jobname}}
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [CUDA12_3-JULIA1_9_4-CUDAJL5_1_1]
+        jobname: [ROCM5_4-JULIA1_9_1-AMDGPU0_8_3]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
@@ -74,9 +74,9 @@ jobs:
       - name: Instantiate
         if: steps.check.outputs.triggered == 'true'
         run: julia --project -e 'using Pkg; Pkg.instantiate()' |
-          julia --project -e 'using Pkg; Pkg.add(name="CUDA", version="v5.1.1")' |
-          julia --project -e 'using CUDA; CUDA.set_runtime_version!(local_toolkit=true)' |
-          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("CUDA")'
+          julia --project -e 'using Pkg; Pkg.add(name="AMDGPU", version="v0.8.3")' |
+          julia --project -e 'using AMDGPU; AMDGPU.use_artifacts!(false)' |
+          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
 
       - name: Test
         if: steps.check.outputs.triggered == 'true'
