@@ -7,11 +7,6 @@ using Test
     @test JACC.JACCPreferences.backend == "amdgpu"
 end
 
-
-@testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "cuda"
-end
-
 @testset "VectorAddLambda" begin
 
     function f(i, a)
