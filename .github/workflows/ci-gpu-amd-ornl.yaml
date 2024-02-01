@@ -11,7 +11,7 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
-    runs-on: [self-hosted, Linux, X64, ci-excl-cousteau-MI100-1]
+    runs-on: [self-hosted, Linux, X64, ornl-excl-cousteau-1]
 
     env:
       GH_JOBNAME: ${{matrix.jobname}}
@@ -73,7 +73,9 @@ jobs:
 
       - name: Instantiate
         if: steps.check.outputs.triggered == 'true'
-        run: julia --project -e 'using Pkg; Pkg.instantiate()' |
+        run: module load julia/1.9.1 |
+          module load rocm/6.0.0 |
+          julia --project -e 'using Pkg; Pkg.instantiate()' |
           julia --project -e 'using Pkg; Pkg.add(name="AMDGPU", version="v0.8.3")' |
           julia --project -e 'using AMDGPU; AMDGPU.use_artifacts!(false)' |
           julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
