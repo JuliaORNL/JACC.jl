@@ -52,6 +52,7 @@ jobs:
           context: "ci-gpu-AMD ${{ matrix.jobname }}"
           state: "pending"
           sha: ${{fromJson(steps.request.outputs.data).head.sha}}
+          target_url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
       - name: Get PR information
         if: steps.check.outputs.triggered == 'true'
