@@ -43,7 +43,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dump env proxy
-        run: env | grep proxy  >> $GITHUB_OUTPUT
+        run: env
 
       # Create a separate PR status pointing at GitHub Actions tab URL
       # just like any other third-party service
