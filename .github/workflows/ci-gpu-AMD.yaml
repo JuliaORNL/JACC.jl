@@ -24,8 +24,8 @@ jobs:
     steps:
       # Verify Environment
       - name: Verify Environment.
-        run: echo $https_proxy
-        run: echo $http_proxy
+        run: echo $https_proxy |
+          echo $http_proxy
 
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
       - name: Verify actor
