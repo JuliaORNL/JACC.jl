@@ -22,17 +22,6 @@ jobs:
         jobname: [ROCM6-JULIA1_9_1-AMDGPU0_8_6]
 
     steps:
-      # Verify Environment
-      - name: Verify Environment https_proxy.
-        run: |
-          echo $https_proxy
-          export -p | grep https_proxy
-
-      - name: Verify Environment http_proxy.
-        run: |
-          echo $http_proxy
-          export -p | grep http_proxy
-
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
       - name: Verify actor
         env:
