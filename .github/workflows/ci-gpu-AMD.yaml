@@ -91,7 +91,7 @@ jobs:
           julia --project -e 'using Pkg; Pkg.instantiate()'
           julia --project -e 'using Pkg; Pkg.add(name="AMDGPU", version="v0.8.6")'
           julia --project -e 'using AMDGPU; AMDGPU.use_artifacts!(false)'
-          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU"
+          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
 
       - name: Test
         if: steps.check.outputs.triggered == 'true'
