@@ -39,7 +39,7 @@ function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,
   ret = CUDA.zeros(Float64, (Mblocks, Nblocks))
   rret = CUDA.zeros(Float64, 1)
   CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) shmem = 16 * 16 * sizeof(Float64) _parallel_reduce_cuda_MN((M, N), ret, f, x...)
-  CUDA.@sync @cuda threads = (Mblocks, Nblocks) blocks = (1, 1) shmem = 16 * 16 * sizeof(Float64) reduce_kernel_cuda_MN((Mblocks, Nblocks), ret, rret)
+  CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (1, 1) shmem = 16 * 16 * sizeof(Float64) reduce_kernel_cuda_MN((Mblocks, Nblocks), ret, rret)
   return rret
 end
 
