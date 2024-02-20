@@ -13,6 +13,10 @@ const backend = JACC.JACCPreferences.backend
 elseif backend == "amdgpu"
     @show "AMDGPU backend loaded"
     include("tests_amdgpu.jl")
+    if "perf" in ARGS
+        println("Running performance tests")
+        include("tests_amdgpu_perf.jl")
+    end
 
 elseif backend == "oneapi"
     @show "OneAPI backend loaded"
