@@ -73,7 +73,7 @@ jobs:
 
       - name: Instantiate
         if: steps.check.outputs.triggered == 'true'
-        run: | 
+        run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.9.1
           module load rocm/6.0.0
@@ -88,7 +88,7 @@ jobs:
           source /etc/profile.d/lmod.sh
           module load julia/1.9.1
           module load rocm/6.0.0
-          julia --project -e 'using Pkg; Pkg.test(;test_args=["perf"])'
+          julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Report PR status
         if: always() && steps.check.outputs.triggered == 'true'

@@ -7,7 +7,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I<:Integer,F<:Function}
   threads = min(N, numThreads)
   blocks = ceil(Int, N / threads)
   @roc groupsize = threads gridsize = threads * blocks _parallel_for_amdgpu(f, x...)
-  AMDGPU.synchronize()
+  # AMDGPU.synchronize()
 end
 
 function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
@@ -17,7 +17,7 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:
   Mblocks = ceil(Int, M / Mthreads)
   Nblocks = ceil(Int, N / Nthreads)
   @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks * Mthreads, Nblocks * Nthreads) _parallel_for_amdgpu_MN(f, x...)
-  AMDGPU.synchronize()
+  # AMDGPU.synchronize()
 end
 
 function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
