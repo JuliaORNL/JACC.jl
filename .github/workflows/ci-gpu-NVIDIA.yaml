@@ -81,7 +81,7 @@ jobs:
 
       - name: Test
         if: steps.check.outputs.triggered == 'true'
-        run: julia --project -e 'using Pkg; Pkg.test(;test_args=["perf"])'
+        run: julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Report PR status
         if: always() && steps.check.outputs.triggered == 'true'
