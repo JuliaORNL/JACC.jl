@@ -3,7 +3,7 @@ module JACCONEAPI
 
 using JACC, oneAPI
 
-function JACC.parallel_for(N::I, f::F, x...) where {I<:Integer,F<:Function}
+function JACC.parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:oneArray}}) where {I<:Integer,F<:Function}
   #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
   maxPossibleItems = 256
   items = min(N, maxPossibleItems)
@@ -11,7 +11,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I<:Integer,F<:Function}
   oneAPI.@sync @oneapi items = items groups = groups _parallel_for_oneapi(f, x...)
 end
 
-function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
+function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:oneArray}}) where {I<:Integer,F<:Function}
   maxPossibleItems = 16
   Mitems = min(M, maxPossibleItems)
   Nitems = min(N, maxPossibleItems)
@@ -20,7 +20,7 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:
   oneAPI.@sync @oneapi items = (Mitems, Nitems) groups = (Mgroups, Ngroups) _parallel_for_oneapi_MN(f, x...)
 end
 
-function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:oneArray}}) where {I<:Integer,F<:Function}
   numItems = 256
   items = min(N, numItems)
   groups = ceil(Int, N / items)
@@ -31,7 +31,7 @@ function JACC.parallel_reduce(N::I, f::F, x...) where {I<:Integer,F<:Function}
   return rret
 end
 
-function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:oneArray}}) where {I<:Integer,F<:Function}
   numItems = 16
   Mitems = min(M, numItems)
   Nitems = min(N, numItems)
