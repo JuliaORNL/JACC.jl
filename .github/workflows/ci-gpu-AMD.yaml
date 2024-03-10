@@ -87,7 +87,7 @@ jobs:
         run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.9.1
-          module load rocm/6.0.0
+          module load rocm
           julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Report PR status
