@@ -27,7 +27,7 @@ jobs:
         run: julia -t 4 --project -e 'using Pkg; Pkg.test()'
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-12
     strategy:
       fail-fast: false
       matrix:
@@ -37,14 +37,8 @@ jobs:
       - name: Checkout Action
         uses: actions/checkout@v4
 
-      - name: Install julia
-        run: |
-          brew update
-          brew install julia
-          julia --version
-
       - name: Instantiate
         run: julia --project -e 'using Pkg; Pkg.instantiate();'
 
       - name: Test Threads
-        run: julia -t 4 --project -e 'using Pkg; Pkg.test()'
+        run: julia -t 3 --project -e 'using Pkg; Pkg.test()'
