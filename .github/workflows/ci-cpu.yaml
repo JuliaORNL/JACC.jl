@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [JACC-threads]
+        jobname: [JACC-serial, JACC-threads]
 
     steps:
       - name: Checkout Action
@@ -23,7 +23,12 @@ jobs:
       - name: Instantiate
         run: julia --project -e 'using Pkg; Pkg.instantiate();'
 
+      - name: Test Serial
+        if: contains(matrix.jobname, '-serial')
+        run: julia --project -e 'using Pkg; Pkg.test()'
+
       - name: Test Threads
+        if: contains(matrix.jobname, '-threads')
         run: julia -t 4 --project -e 'using Pkg; Pkg.test()'
 
   macos:
@@ -31,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [JACC-threads]
+        jobname: [JACC-serial, JACC-threads]
 
     steps:
       - name: Checkout Action
@@ -40,5 +45,10 @@ jobs:
       - name: Instantiate
         run: julia --project -e 'using Pkg; Pkg.instantiate();'
 
+      - name: Test Serial
+        if: contains(matrix.jobname, '-serial')
+        run: julia --project -e 'using Pkg; Pkg.test()'
+
       - name: Test Threads
+        if: contains(matrix.jobname, '-threads')
         run: julia -t 3 --project -e 'using Pkg; Pkg.test()'
