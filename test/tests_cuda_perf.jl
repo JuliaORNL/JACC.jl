@@ -26,24 +26,24 @@ using Test
     end
 
 
-    x_device = CUDA.CuArray(x)
-    y_device = CUDA.CuArray(y)
+    x_device = CuArray(x)
+    y_device = CuArray(y)
 
     for i in 1:11
         @time axpy_cuda(N, alpha, x_device, y_device)
     end
 
-    # JACCCUDA version 
+    # JACCCUDA version
     function axpy(i, alpha, x, y)
         if i <= length(x)
             @inbounds x[i] += alpha * y[i]
         end
     end
 
-    x_device_JACC = JACC.Array(x)
-    y_device_JACC = JACC.Array(y)
+    x_device_JACC = CuArray(x)
+    y_device_JACC = CuArray(y)
 
     for i in 1:11
-        @time JACC.parallel_for(N, axpy, alpha, x_device_JACC, y_device_JACC)
+        @time JACC.parallel_for(CUDABackend(), N, axpy, alpha, x_device_JACC, y_device_JACC)
     end
 end

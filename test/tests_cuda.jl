@@ -3,10 +3,6 @@ import JACC
 using Test
 
 
-@testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "cuda"
-end
-
 @testset "VectorAddLambda" begin
 
     function f(i, a)
@@ -17,8 +13,8 @@ end
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
 
-    a_device = JACC.Array(a)
-    JACC.parallel_for(N, f, a_device)
+    a_device = CuArray(a)
+    JACC.parallel_for(CUDABackend(), N, f, a_device)
 
     a_expected = a .+ 5.0
     @test Array(a_device) ≈ a_expected rtol = 1e-5
@@ -43,9 +39,9 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_device = JACC.Array(x)
-    y_device = JACC.Array(y)
-    JACC.parallel_for(N, axpy, alpha, x_device, y_device)
+    x_device = CuArray(x)
+    y_device = CuArray(y)
+    JACC.parallel_for(CUDABackend(), N, axpy, alpha, x_device, y_device)
 
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)

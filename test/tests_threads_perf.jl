@@ -10,8 +10,8 @@ using Test
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_JACC = JACC.Array(x)
-    y_JACC = JACC.Array(y)
+    x_JACC = Array(x)
+    y_JACC = Array(y)
 
     # Threads version
     function axpy_threads(N, alpha, x, y)
@@ -25,7 +25,7 @@ using Test
         @time axpy_threads(N, alpha, x, y)
     end
 
-    # JACC version 
+    # JACC version
     function axpy(i, alpha, x, y)
         if i <= length(x)
             @inbounds x[i] += alpha * y[i]
@@ -33,6 +33,6 @@ using Test
     end
 
     for i in 1:ntimes
-        @time JACC.parallel_for(N, axpy, alpha, x_JACC, y_JACC)
+        @time JACC.parallel_for(ThreadsBackend(), N, axpy, alpha, x_JACC, y_JACC)
     end
 end

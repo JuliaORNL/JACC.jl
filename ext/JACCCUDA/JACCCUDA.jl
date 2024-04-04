@@ -2,14 +2,14 @@ module JACCCUDA
 
 using JACC, CUDA
 
-function JACC.parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:CuArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_for(::CUDABackend, N::I, f::F, x...) where {I<:Integer,F<:Function}
   maxPossibleThreads = attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X)
   threads = min(N, maxPossibleThreads)
   blocks = ceil(Int, N / threads)
   CUDA.@sync @cuda threads = threads blocks = blocks _parallel_for_cuda(f, x...)
 end
 
-function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:CuArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_for(::CUDABackend, (M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 16
   Mthreads = min(M, numThreads)
   Nthreads = min(N, numThreads)
@@ -18,7 +18,7 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:
   CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) _parallel_for_cuda_MN(f, x...)
 end
 
-function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:CuArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce(::CUDABackend, N::I, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 512
   threads = min(N, numThreads)
   blocks = ceil(Int, N / threads)
@@ -30,7 +30,7 @@ function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:CuArray}}) 
 end
 
 
-function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:CuArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce(::CUDABackend, (M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 16
   Mthreads = min(M, numThreads)
   Nthreads = min(N, numThreads)
@@ -294,7 +294,10 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
 end
 
 function __init__()
-  const JACC.Array = CUDA.CuArray{T,N} where {T,N}
+  if JACC.JACCPreferences.backend == "cuda"
+    const JACC.default_backend = CUDABackend()
+    @info "Set default backend to $(JACC.default_backend)"
+  end
 end
 
 end # module JACCCUDA

@@ -2,10 +2,6 @@ import JACC
 using Test
 
 
-@testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "threads"
-end
-
 @testset "VectorAddLambda" begin
 
     function f(x, a)
@@ -16,7 +12,7 @@ end
     a = round.(rand(Float32, dims) * 100)
     a_expected = a .+ 5.0
 
-    JACC.parallel_for(10, f, a)
+    JACC.parallel_for(ThreadsBackend(), 10, f, a)
 
     @test a ≈ a_expected rtol = 1e-5
 
@@ -42,9 +38,9 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_host_JACC = JACC.Array(x)
-    y_host_JACC = JACC.Array(y)
-    JACC.parallel_for(N, axpy, alpha, x_host_JACC, y_host_JACC)
+    x_host_JACC = Array(x)
+    y_host_JACC = Array(y)
+    JACC.parallel_for(ThreadsBackend(), N, axpy, alpha, x_host_JACC, y_host_JACC)
 
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)
@@ -91,25 +87,25 @@ end
 
         r_old = copy(r)
 
-        JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
+        JACC.parallel_for(ThreadsBackend(), SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
 
-        alpha0 = JACC.parallel_reduce(SIZE, dot, r, r)
-        alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
+        alpha0 = JACC.parallel_reduce(ThreadsBackend(), SIZE, dot, r, r)
+        alpha1 = JACC.parallel_reduce(ThreadsBackend(), SIZE, dot, p, s)
 
         alpha = alpha0 / alpha1
         negative_alpha = alpha * (-1.0)
 
-        JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
-        JACC.parallel_for(SIZE, axpy, alpha, x, p)
+        JACC.parallel_for(ThreadsBackend(), SIZE, axpy, negative_alpha, r, s)
+        JACC.parallel_for(ThreadsBackend(), SIZE, axpy, alpha, x, p)
 
-        beta0 = JACC.parallel_reduce(SIZE, dot, r, r)
-        beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
+        beta0 = JACC.parallel_reduce(ThreadsBackend(), SIZE, dot, r, r)
+        beta1 = JACC.parallel_reduce(ThreadsBackend(), SIZE, dot, r_old, r_old)
         beta = beta0 / beta1
 
         r_aux = copy(r)
 
-        JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
-        ccond = JACC.parallel_reduce(SIZE, dot, r, r)
+        JACC.parallel_for(ThreadsBackend(), SIZE, axpy, beta, r_aux, p)
+        ccond = JACC.parallel_reduce(ThreadsBackend(), SIZE, dot, r, r)
         global cond = ccond
         p = copy(r_aux)
 
@@ -217,14 +213,14 @@ end
     w = ones(9)
     t = 1.0
 
-    df = JACC.Array(f)
-    df1 = JACC.Array(f1)
-    df2 = JACC.Array(f2)
-    dcx = JACC.Array(cx)
-    dcy = JACC.Array(cy)
-    dw = JACC.Array(w)
+    df = Array(f)
+    df1 = Array(f1)
+    df2 = Array(f2)
+    dcx = Array(cx)
+    dcy = Array(cy)
+    dw = Array(w)
 
-    JACC.parallel_for((SIZE, SIZE), lbm_kernel, df, df1, df2, t, dw, dcx, dcy, SIZE)
+    JACC.parallel_for(ThreadsBackend(), (SIZE, SIZE), lbm_kernel, df, df1, df2, t, dw, dcx, dcy, SIZE)
 
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
