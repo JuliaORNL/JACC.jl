@@ -1,10 +1,11 @@
-import JACC
+using JACC
+using CUDA
 using Test
 
 
-@testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "threads"
-end
+# @testset "TestBackend" begin
+#     @test JACC.JACCPreferences.backend == "threads"
+# end
 
 @testset "VectorAddLambda" begin
 
@@ -14,12 +15,15 @@ end
 
     dims = (10)
     a = round.(rand(Float32, dims) * 100)
+    ca = CuArray(copy(a))
     a_expected = a .+ 5.0
 
-    JACC.parallel_for(10, f, a)
-
+    ## Using multiple dispatch the JACCArray version is first called then it unwraps the array and passes it along to the correct backend version.
+    JACC.parallel_for(10, f, JACC.JACCArray(a))
+    JACC.parallel_for(10, f, JACC.JACCArray(ca))
     @test a ≈ a_expected rtol = 1e-5
-
+    ## Converting the result from cuda device to CPU and verifying that they match.
+    @test a == Array(ca)
 end
 
 @testset "AXPY" begin

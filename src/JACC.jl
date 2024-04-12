@@ -3,11 +3,16 @@ module JACC
 # module to set back end preferences 
 include("JACCPreferences.jl")
 include("helper.jl")
+include("JACCArray.jl")
 
-export Array
+#export Array
 export parallel_for
 
-global Array
+#global Array
+
+function parallel_for(N::I, f::F, x::JACCArray) where {I<:Integer,F<:Function}
+  parallel_for(N, f, x.array)
+end
 
 function parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:Base.Array}}) where {I<:Integer,F<:Function}
   @maybe_threaded for i in 1:N
@@ -50,11 +55,11 @@ function parallel_reduce((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:Ba
 end
 
 function __init__()
-  @info("Using JACC backend: $(JACCPreferences.backend)")
+  # @info("Using JACC backend: $(JACCPreferences.backend)")
 
-  if JACCPreferences.backend == "threads"
-    const JACC.Array = Base.Array{T,N} where {T,N}
-  end
+  # if JACCPreferences.backend == "threads"
+  #   const JACC.Array = Base.Array{T,N} where {T,N}
+  # end
 end
 
 
