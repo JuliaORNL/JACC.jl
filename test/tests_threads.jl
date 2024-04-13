@@ -1,5 +1,4 @@
 using JACC
-using CUDA
 using Test
 
 
@@ -8,26 +7,20 @@ using Test
 # end
 
 @testset "VectorAddLambda" begin
-
     function f(x, a)
         @inbounds a[x] += 5.0
     end
 
     dims = (10)
     a = round.(rand(Float32, dims) * 100)
-    ca = CuArray(copy(a))
     a_expected = a .+ 5.0
 
     ## Using multiple dispatch the JACCArray version is first called then it unwraps the array and passes it along to the correct backend version.
-    JACC.parallel_for(10, f, JACC.JACCArray(a))
-    JACC.parallel_for(10, f, JACC.JACCArray(ca))
+    JACC.parallel_for(10, f, JACC.JACCArgsList{typeof(a)}(a))
     @test a ≈ a_expected rtol = 1e-5
-    ## Converting the result from cuda device to CPU and verifying that they match.
-    @test a == Array(ca)
 end
 
 @testset "AXPY" begin
-
     function seq_axpy(N, alpha, x, y)
         Threads.@threads for i in 1:N
             @inbounds x[i] += alpha * y[i]
@@ -48,7 +41,7 @@ end
 
     x_host_JACC = JACC.Array(x)
     y_host_JACC = JACC.Array(y)
-    JACC.parallel_for(N, axpy, alpha, x_host_JACC, y_host_JACC)
+    JACC.parallel_for(N, axpy, JACC.JACCArgsList{typeof(x_host_JACC)}(alpha, x_host_JACC, y_host_JACC))
 
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)
@@ -95,25 +88,25 @@ end
 
         r_old = copy(r)
 
-        JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
+        JACC.parallel_for(SIZE, matvecmul, JACC.JACCArgsList{typeof(a0)}(a0, a1, a2, p, s, SIZE))
 
-        alpha0 = JACC.parallel_reduce(SIZE, dot, r, r)
-        alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
+        alpha0 = JACC.parallel_reduce(SIZE, dot, JACC.JACCArgsList{typeof(r)}(r, r))
+        alpha1 = JACC.parallel_reduce(SIZE, dot, JACC.JACCArgsList{typeof(p)}(p, s))
 
         alpha = alpha0 / alpha1
         negative_alpha = alpha * (-1.0)
 
-        JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
-        JACC.parallel_for(SIZE, axpy, alpha, x, p)
+        JACC.parallel_for(SIZE, axpy, JACC.JACCArgsList{typeof(r)}(negative_alpha, r, s))
+        JACC.parallel_for(SIZE, axpy, JACC.JACCArgsList{typeof(x)}(alpha, x, p))
 
-        beta0 = JACC.parallel_reduce(SIZE, dot, r, r)
-        beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
+        beta0 = JACC.parallel_reduce(SIZE, dot, JACC.JACCArgsList{typeof(r)}(r, r))
+        beta1 = JACC.parallel_reduce(SIZE, dot, JACC.JACCArgsList{typeof(r)}(r_old, r_old))
         beta = beta0 / beta1
 
         r_aux = copy(r)
 
-        JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
-        ccond = JACC.parallel_reduce(SIZE, dot, r, r)
+        JACC.parallel_for(SIZE, axpy, JACC.JACCArgsList{typeof(r_aux)}(beta, r_aux, p))
+        ccond = JACC.parallel_reduce(SIZE, dot, JACC.JACCArgsList{typeof(r)}(r, r))
         global cond = ccond
         p = copy(r_aux)
 
@@ -198,26 +191,8 @@ end
     f = ones(SIZE * SIZE * 9) .* 2.0
     f1 = ones(SIZE * SIZE * 9) .* 3.0
     f2 = ones(SIZE * SIZE * 9) .* 4.0
-    cx = zeros(9)
-    cy = zeros(9)
-    cx[1] = 0
-    cy[1] = 0
-    cx[2] = 1
-    cy[2] = 0
-    cx[3] = -1
-    cy[3] = 0
-    cx[4] = 0
-    cy[4] = 1
-    cx[5] = 0
-    cy[5] = -1
-    cx[6] = 1
-    cy[6] = 1
-    cx[7] = -1
-    cy[7] = 1
-    cx[8] = -1
-    cy[8] = -1
-    cx[9] = 1
-    cy[9] = -1
+    cx = Vector{Float64}([0,1,-1,0,0,1,-1,-1,1])
+    cy = Vector{Float64}([0,0,0,1,-1,1,1,-1,-1])
     w = ones(9)
     t = 1.0
 
@@ -228,7 +203,7 @@ end
     dcy = JACC.Array(cy)
     dw = JACC.Array(w)
 
-    JACC.parallel_for((SIZE, SIZE), lbm_kernel, df, df1, df2, t, dw, dcx, dcy, SIZE)
+    JACC.parallel_for((SIZE, SIZE), lbm_kernel, JACC.JACCArgsList{typeof(df)}(df, df1, df2, t, dw, dcx, dcy, SIZE))
 
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 

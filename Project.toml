@@ -4,20 +4,24 @@ authors = ["pedrovalerolara <valerolarap@ornl.gov>", "williamfgc <williamfgc@yah
 version = "0.0.3"
 
 [deps]
+PackageExtensionCompat = "65ce6f38-6b18-4e1d-a461-8949797d7930"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 
 [extensions]
 JACCAMDGPU = ["AMDGPU"]
 JACCCUDA = ["CUDA"]
 JACCONEAPI = ["oneAPI"]
+JACCMETAL = ["Metal"]
 
 [compat]
 AMDGPU = "0.8"
 CUDA = "5"
+PackageExtensionCompat = "1"
 Preferences = "1.4.0"
 julia = "1.9.0"
