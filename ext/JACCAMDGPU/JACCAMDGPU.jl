@@ -6,8 +6,8 @@ function JACC.parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) wh
   numThreads = 512
   threads = min(N, numThreads)
   blocks = ceil(Int, N / threads)
-  @roc groupsize = threads gridsize = threads*blocks _parallel_for_amdgpu(f, x...)
-  # AMDGPU.synchronize()
+  @roc groupsize = threads gridsize = blocks _parallel_for_amdgpu(f, x...)
+  AMDGPU.synchronize()
 end
 
 function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
@@ -16,8 +16,8 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:
   Nthreads = min(N, numThreads)
   Mblocks = ceil(Int, M / Mthreads)
   Nblocks = ceil(Int, N / Nthreads)
-  @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks*Mthreads, Nblocks*Nthreads) _parallel_for_amdgpu_MN(f, x...)
-  # AMDGPU.synchronize()
+  @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) _parallel_for_amdgpu_MN(f, x...)
+  AMDGPU.synchronize()
 end
 
 function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
@@ -26,10 +26,10 @@ function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}})
   blocks = ceil(Int, N / threads)
   ret = AMDGPU.zeros(Float64, blocks)
   rret = AMDGPU.zeros(Float64, 1)
-  @roc groupsize = threads gridsize = threads*blocks _parallel_reduce_amdgpu(N, ret, f, x...)
-  #AMDGPU.synchronize()
+  @roc groupsize = threads gridsize = blocks _parallel_reduce_amdgpu(N, ret, f, x...)
+  AMDGPU.synchronize()
   @roc groupsize = threads gridsize = threads reduce_kernel_amdgpu(blocks, ret, rret)
-  #AMDGPU.synchronize()
+  AMDGPU.synchronize()
   return rret
 
 end
@@ -42,10 +42,10 @@ function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number
   Nblocks = ceil(Int, N / Nthreads)
   ret = AMDGPU.zeros(Float64, (Mblocks, Nblocks))
   rret = AMDGPU.zeros(Float64, 1)
-  @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks*Mthreads, Nblocks*Nthreads) _parallel_reduce_amdgpu_MN((M, N), ret, f, x...)
-  #AMDGPU.synchronize()
+  @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) _parallel_reduce_amdgpu_MN((M, N), ret, f, x...)
+  AMDGPU.synchronize()
   @roc groupsize = (Mthreads, Nthreads) gridsize = (Mthreads, Nthreads) reduce_kernel_amdgpu_MN((Mblocks, Nblocks), ret, rret)
-  #AMDGPU.synchronize()
+  AMDGPU.synchronize()
   return rret
 end
 
