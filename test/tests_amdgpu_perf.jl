@@ -11,7 +11,7 @@ using Test
  end
 
  function axpy_amdgpu(SIZE,alpha,x,y)
-   maxPossibleThreads = 512 
+   maxPossibleThreads = 512
    threads = min(SIZE, maxPossibleThreads)
    blocks = ceil(Int, SIZE/threads)
    @roc groupsize=threads gridsize=threads*blocks axpy_amdgpu_kernel(alpha,x,y)
@@ -37,13 +37,13 @@ using Test
  x = ones(SIZE)
  y = ones(SIZE)
  alpha = 2.0
- jx = JACC.Array(x)
- jy = JACC.Array(y)
- 
- JACC.parallel_for(10, axpy, alpha, jx, jy)
+ jx = ROCArray(x)
+ jy = ROCArray(y)
+
+ JACC.parallel_for(ROCBackend(), 10, axpy, alpha, jx, jy)
  for i in [10,100,1_000,1_0000,100_000,1_000_000,10_000_000,100_000_000]
    @time begin
-     JACC.parallel_for(i, axpy, alpha, jx, jy)
+     JACC.parallel_for(ROCBackend(), i, axpy, alpha, jx, jy)
    end
  end
 

@@ -2,7 +2,7 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
-function JACC.parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_for(::ROCBackend, N::I, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 512
   threads = min(N, numThreads)
   blocks = ceil(Int, N / threads)
@@ -10,7 +10,7 @@ function JACC.parallel_for(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) wh
   AMDGPU.synchronize()
 end
 
-function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_for(::ROCBackend, (M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 16
   Mthreads = min(M, numThreads)
   Nthreads = min(N, numThreads)
@@ -20,7 +20,7 @@ function JACC.parallel_for((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:
   AMDGPU.synchronize()
 end
 
-function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce(::ROCBackend, N::I, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 512
   threads = min(N, numThreads)
   blocks = ceil(Int, N / threads)
@@ -34,7 +34,7 @@ function JACC.parallel_reduce(N::I, f::F, x::Vararg{Union{<:Number,<:ROCArray}})
 
 end
 
-function JACC.parallel_reduce((M, N)::Tuple{I,I}, f::F, x::Vararg{Union{<:Number,<:ROCArray}}) where {I<:Integer,F<:Function}
+function JACC.parallel_reduce(::ROCBackend, (M, N)::Tuple{I,I}, f::F, x...) where {I<:Integer,F<:Function}
   numThreads = 16
   Mthreads = min(M, numThreads)
   Nthreads = min(N, numThreads)
@@ -300,7 +300,10 @@ function reduce_kernel_amdgpu_MN((M, N), red, ret)
 end
 
 function __init__()
-  const JACC.Array = AMDGPU.ROCArray{T,N} where {T,N}
+  if JACC.JACCPreferences.backend == "amdgpu"
+    const JACC.default_backend = ROCBackend()
+    @info "Set default backend to $(JACC.default_backend)"
+  end
 end
 
 end # module JACCAMDGPU

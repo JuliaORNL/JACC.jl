@@ -1,9 +1,5 @@
 [deps]
-Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-Preferences = "21216c6a-2e73-6563-6e65-726566657250"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"

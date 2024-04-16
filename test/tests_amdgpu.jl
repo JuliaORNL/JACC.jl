@@ -17,8 +17,8 @@ end
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
 
-    a_device = JACC.Array(a)
-    JACC.parallel_for(N, f, a_device)
+    a_device = ROCArray(a)
+    JACC.parallel_for(ROCBackend, N, f, a_device)
 
     a_expected = a .+ 5.0
     @test Array(a_device) ≈ a_expected rtol = 1e-5
