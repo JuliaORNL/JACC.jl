@@ -5,6 +5,8 @@ import Atomix: @atomic
 # module to set back end preferences 
 include("JACCPreferences.jl")
 include("helper.jl")
+# overloaded array functions
+include("array.jl")
 
 export Array, @atomic
 export parallel_for
@@ -50,6 +52,7 @@ function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F
 	end
 	return ret
 end
+
 
 function __init__()
 	const JACC.Array = Base.Array{T, N} where {T, N}

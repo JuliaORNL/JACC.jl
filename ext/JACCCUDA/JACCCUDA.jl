@@ -2,6 +2,9 @@ module JACCCUDA
 
 using JACC, CUDA
 
+# overloaded array functions
+include("array.jl")
+
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 	maxPossibleThreads = attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X)
 	threads = min(N, maxPossibleThreads)

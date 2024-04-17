@@ -2,6 +2,8 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
+include("array.jl")
+
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 512
 	threads = min(N, numThreads)
