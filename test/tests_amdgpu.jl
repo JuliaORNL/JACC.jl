@@ -52,3 +52,23 @@ end
 
 	@test Array(x_device) ≈ x_expected rtol = 1e-1
 end
+
+@testset "AtomicCounter" begin
+
+	function axpy_counter!(i, alpha, x, y, counter)
+		@inbounds x[i] += alpha * y[i]
+		JACC.@atomic counter[1] += 1
+	end
+
+	N = Int32(10)
+	# Generate random vectors x and y of length N for the interval [0, 100]
+	alpha = 2.5
+
+	x = JACC.Array(round.(rand(Float32, N) * 100))
+	y = JACC.Array(round.(rand(Float32, N) * 100))
+	counter = JACC.Array{Int32}([0])
+	JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
+
+	@test Array(counter)[1] == N
+end
+

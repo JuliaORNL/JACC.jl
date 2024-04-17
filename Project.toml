@@ -4,6 +4,7 @@ authors = ["pedrovalerolara <valerolarap@ornl.gov>", "williamfgc <williamfgc@yah
 version = "0.0.3"
 
 [deps]
+Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 
 [weakdeps]
