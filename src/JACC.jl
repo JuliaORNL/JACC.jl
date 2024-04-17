@@ -1,11 +1,12 @@
 __precompile__(false)
 module JACC
 
+import Atomix: @atomic
 # module to set back end preferences 
 include("JACCPreferences.jl")
 include("helper.jl")
 
-export Array
+export Array, @atomic
 export parallel_for
 
 global Array
