@@ -1,8 +1,8 @@
 
-function zeros(T, dims...)
-    return Base.zeros(T, dims...)
+@inline function zeros(T, dims...)
+    _zeros_impl(BackendTag(), T, dims...)
 end
 
-function ones(T, dims...)
-    return Base.ones(T, dims...)
+@inline function ones(T, dims...)
+    _ones_impl(BackendTag(), T, dims...)
 end

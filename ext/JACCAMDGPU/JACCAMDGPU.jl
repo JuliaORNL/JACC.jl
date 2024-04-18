@@ -2,6 +2,8 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
+struct AMDGPUBackendTag end
+
 # overloaded array functions
 include("array.jl")
 
@@ -9,7 +11,7 @@ include("array.jl")
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_for_impl(::AMDGPUBackendTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -20,8 +22,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     AMDGPU.synchronize()
 end
 
-function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_for_impl(::AMDGPUBackendTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -34,7 +35,7 @@ function JACC.parallel_for(
     AMDGPU.synchronize()
 end
 
-function JACC.parallel_for(
+function JACC._parallel_for_impl(::AMDGPUBackendTag
         (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     numThreads = 32
@@ -51,8 +52,7 @@ function JACC.parallel_for(
     AMDGPU.synchronize()
 end
 
-function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_reduce_impl(::AMDGPUBackendTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -67,8 +67,7 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_reduce_impl(::AMDGPUBackendTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -392,6 +391,7 @@ end
 
 function __init__()
     const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
+    const JACC.BackendTag = AMDGPUBackendTag
 end
 
 end # module JACCAMDGPU

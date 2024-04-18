@@ -1,8 +1,8 @@
 
-function JACC.zeros(T, dims...)
+function JACC._zeros_impl(::CUDABackendTag, T, dims...)
     return CUDA.zeros(T, dims...)
 end
 
-function JACC.ones(T, dims...)
+function JACC._ones_impl(::CUDABackendTag, T, dims...)
     return CUDA.ones(T, dims...)
 end
