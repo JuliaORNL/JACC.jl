@@ -6,10 +6,14 @@ using JACC, CUDA
 include("array.jl")
 
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
-	maxPossibleThreads = attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X)
-	threads = min(N, maxPossibleThreads)
-	blocks = ceil(Int, N / threads)
-	CUDA.@sync @cuda threads = threads blocks = blocks _parallel_for_cuda(f, x...)
+    parallel_args = (N, f, x...)
+    parallel_kargs = cudaconvert.(parallel_args)
+    parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
+    parallel_kernel = cufunction(_parallel_for_cuda, parallel_tt)
+    maxPossibleThreads = CUDA.maxthreads(parallel_kernel)
+    threads = min(N, maxPossibleThreads)
+    blocks = ceil(Int, N / threads)
+    parallel_kernel(parallel_kargs...; threads=threads, blocks=blocks)
 end
 
 function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
@@ -46,9 +50,11 @@ function JACC.parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integ
 	return rret
 end
 
-function _parallel_for_cuda(f, x...)
+function _parallel_for_cuda(N, f, x...)
 	i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-	f(i, x...)
+    if i <= N
+        f(i, x...)
+    end
 	return nothing
 end
 
