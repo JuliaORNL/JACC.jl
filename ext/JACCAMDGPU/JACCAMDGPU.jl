@@ -4,7 +4,9 @@ using JACC, AMDGPU
 
 include("array.jl")
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+struct AMDGPUTag end
+
+function JACC.parallel_for(::AMDGPUTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 512
 	threads = min(N, numThreads)
 	blocks = ceil(Int, N / threads)
@@ -12,7 +14,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 	AMDGPU.synchronize()
 end
 
-function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::AMDGPUTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -22,7 +24,7 @@ function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer,
 	AMDGPU.synchronize()
 end
 
-function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::AMDGPUTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 512
 	threads = min(N, numThreads)
 	blocks = ceil(Int, N / threads)
@@ -36,7 +38,7 @@ function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Functi
 
 end
 
-function JACC.parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::AMDGPUTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -303,6 +305,7 @@ end
 
 function __init__()
 	const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
+    const JACC.Tag = AMDGPUTag
 end
 
 end # module JACCAMDGPU

@@ -5,7 +5,9 @@ using JACC, CUDA
 # overloaded array functions
 include("array.jl")
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+struct CUDATag end
+
+function JACC.parallel_for(::CUDATag, N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
     parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
@@ -14,9 +16,14 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     threads = min(N, maxPossibleThreads)
     blocks = ceil(Int, N / threads)
     parallel_kernel(parallel_kargs...; threads=threads, blocks=blocks)
+
+# 	maxPossibleThreads = attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X)
+# 	threads = min(N, maxPossibleThreads)
+# 	blocks = ceil(Int, N / threads)
+# 	CUDA.@sync @cuda threads = threads blocks = blocks _parallel_for_cuda(f, x...)
 end
 
-function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::CUDATag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -25,7 +32,7 @@ function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer,
 	CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) _parallel_for_cuda_MN(f, x...)
 end
 
-function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::CUDATag, N::I, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 512
 	threads = min(N, numThreads)
 	blocks = ceil(Int, N / threads)
@@ -37,7 +44,7 @@ function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Functi
 end
 
 
-function JACC.parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::CUDATag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -304,6 +311,7 @@ end
 
 function __init__()
 	const JACC.Array = CUDA.CuArray{T, N} where {T, N}
+    const JACC.Tag = CUDATag
 end
 
 end # module JACCCUDA

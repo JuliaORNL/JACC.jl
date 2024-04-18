@@ -1,25 +1,29 @@
-__precompile__(false)
+# __precompile__(false)
 module JACC
 
-import Atomix: @atomic
 # module to set back end preferences 
 include("JACCPreferences.jl")
 include("helper.jl")
-# overloaded array functions
-include("array.jl")
 
-export Array, @atomic
+export Array
 export parallel_for
 
 global Array
+global Tag
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+struct ThreadsTag end
+
+function parallel_for(::ThreadsTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
 	@maybe_threaded for i in 1:N
 		f(i, x...)
 	end
 end
 
-function parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+@inline function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+    parallel_for(Tag(), N, f, x...)
+end
+
+function parallel_for(::ThreadsTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	@maybe_threaded for j in 1:N
 		for i in 1:M
 			f(i, j, x...)
@@ -27,7 +31,11 @@ function parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <:
 	end
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+@inline function parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+    parallel_for(Tag(), (M, N), f, x...)
+end
+
+function parallel_reduce(::ThreadsTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
 	tmp = zeros(Threads.nthreads())
 	ret = zeros(1)
 	@maybe_threaded for i in 1:N
@@ -39,7 +47,11 @@ function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
 	return ret
 end
 
-function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+@inline function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+    parallel_reduce(Tag(), N, f, x...)
+end
+
+function parallel_reduce(::ThreadsTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 	tmp = zeros(Threads.nthreads())
 	ret = zeros(1)
 	@maybe_threaded for j in 1:N
@@ -53,9 +65,13 @@ function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F
 	return ret
 end
 
+@inline function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+    parallel_reduce(Tag(), (M, N), f, x...)
+end
 
 function __init__()
 	const JACC.Array = Base.Array{T, N} where {T, N}
+    const JACC.Tag = ThreadsTag
 end
 
 
