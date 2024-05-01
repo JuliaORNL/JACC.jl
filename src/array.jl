@@ -1,17 +1,19 @@
-
-
-function zeros(T, dims...)
-	return Base.zeros(T, dims...)
+function default_eltype()
+	return Float64
 end
 
-function ones(T, dims...)
-	return Base.ones(T, dims...)
+function zeros(T::Type, dims...)
+	return fill!(similar(JACC.Array{T}, dims...), zero(T))
+end
+
+function ones(T::Type, dims...)
+	return fill!(similar(JACC.Array{T}, dims...), one(T))
 end
 
 function zeros(dims...)
-	return Base.zeros(dims...)
+	return zeros(default_eltype(), dims...)
 end
 
 function ones(dims...)
-	return Base.ones(dims...)
+	return ones(default_eltype(), dims...)
 end

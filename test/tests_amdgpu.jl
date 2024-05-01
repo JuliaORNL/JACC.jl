@@ -91,6 +91,7 @@ end
 @testset "zeros-N" begin
 
 	N = 10
+	JACC.default_eltype() = Float32
 	x = JACC.zeros(N)
 	# default is Float32, unlike on CPU Float64
 	@test typeof(x) == AMDGPU.ROCArray{Float32, 1, AMDGPU.Runtime.Mem.HIPBuffer}

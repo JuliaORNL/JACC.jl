@@ -89,8 +89,8 @@ end
 end
 
 @testset "zeros-N" begin
-
 	N = 10
+	JACC.default_eltype() = Float32
 	x = JACC.zeros(N)
 	# default is Float32, unlike on CPU Float64
 	@test typeof(x) == CUDA.CuArray{Float32, 1, CUDA.Mem.DeviceBuffer}
@@ -106,7 +106,6 @@ end
 end
 
 @testset "ones" begin
-
 	N = 10
 	x = JACC.ones(Float64, N)
 	@test typeof(x) == CUDA.CuArray{Float64, 1, CUDA.Mem.DeviceBuffer}
