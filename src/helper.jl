@@ -10,3 +10,9 @@ end
 
 struct JACCArrayType{T}
 end
+
+arraytype(::JACCArrayType{T}) where {T} = T
+
+function arraytype()
+	return arraytype(JACC.JAT)
+end
