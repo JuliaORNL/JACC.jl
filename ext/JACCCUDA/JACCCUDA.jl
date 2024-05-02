@@ -2,9 +2,6 @@ module JACCCUDA
 
 using JACC, CUDA
 
-# overloaded array functions
-include("array.jl")
-
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
