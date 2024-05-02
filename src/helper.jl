@@ -6,3 +6,7 @@ macro maybe_threaded(ex)
 		return esc(:(Threads.@threads :static $ex))
 	end
 end
+
+
+struct JACCArrayType{T}
+end

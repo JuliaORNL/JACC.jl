@@ -2,10 +2,7 @@ module JACCCUDA
 
 using JACC, CUDA
 
-# overloaded array functions
-include("array.jl")
-
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::JACCArrayType{<:CUDA.CuArray}, N::Integer, f::Function, x...)
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
     parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
@@ -16,7 +13,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_kernel(parallel_kargs...; threads=threads, blocks=blocks)
 end
 
-function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::JACCArrayType{<:CUDA.CuArray},(M, N)::Tuple{Integer, Integer}, f::Function, x...)
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -25,7 +22,7 @@ function JACC.parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer,
 	CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) _parallel_for_cuda_MN(f, x...)
 end
 
-function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::JACCArrayType{<:CUDA.CuArray}, N::Integer, f::Function, x...)
 	numThreads = 512
 	threads = min(N, numThreads)
 	blocks = ceil(Int, N / threads)
@@ -37,7 +34,7 @@ function JACC.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Functi
 end
 
 
-function JACC.parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::JACCArrayType{<:CUDA.CuArray}, (M, N)::Tuple{Integer, Integer}, f::Function, x...) 
 	numThreads = 16
 	Mthreads = min(M, numThreads)
 	Nthreads = min(N, numThreads)
@@ -303,7 +300,8 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
 end
 
 function __init__()
-	const JACC.Array = CUDA.CuArray{T, N} where {T, N}
+	# const JACC.Array = CUDA.CuArray{T, N} where {T, N}
+	const JACC.JAT = JACCArrayType{CUDA.CuArray}()
 end
 
 end # module JACCCUDA
