@@ -2,6 +2,14 @@ function default_eltype()
 	return Float64
 end
 
+function zeros(T::Type{<:AbstractArray}, dims...)
+	return fill!(T, dims...)
+end
+
+function ones(T::Tyope{<:AbstractArray}, dims...)
+	return fill!(T, dims...)
+end
+
 function zeros(T::Type, dims...)
 	return fill!(similar(arraytype(){T}, dims...), zero(T))
 end
