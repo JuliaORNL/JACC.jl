@@ -2,7 +2,7 @@
 module JACCONEAPI
 
 using JACC, oneAPI
-
+using JACC: JACCArrayType
 function JACC.parallel_for(::JACCArrayType{<:oneAPI.oneArray}, N::Integer, f::Function, x...)
 	#maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
 	maxPossibleItems = 256

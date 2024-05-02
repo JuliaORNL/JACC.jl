@@ -6,7 +6,7 @@ function zeros(T::Type{<:AbstractArray}, dims...)
 	return fill!(T, dims...)
 end
 
-function ones(T::Tyope{<:AbstractArray}, dims...)
+function ones(T::Type{<:AbstractArray}, dims...)
 	return fill!(T, dims...)
 end
 

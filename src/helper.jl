@@ -16,3 +16,5 @@ arraytype(::JACCArrayType{T}) where {T} = T
 function arraytype()
 	return arraytype(JACC.JAT)
 end
+
+array(T) = arraytype()(T)

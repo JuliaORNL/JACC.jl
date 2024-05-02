@@ -1,6 +1,7 @@
 module JACCAMDGPU
 
 using JACC, AMDGPU
+using JACC: JACCArrayType
 
 function JACC.parallel_for(::JACCArrayType{<:AMDGPU.ROCArray}, N::Integer, f::Function, x...)
 	numThreads = 512

@@ -1,7 +1,7 @@
 module JACCCUDA
 
 using JACC, CUDA
-
+using JACC: JACCArrayType
 function JACC.parallel_for(::JACCArrayType{<:CUDA.CuArray}, N::Integer, f::Function, x...)
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
@@ -300,8 +300,7 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
 end
 
 function __init__()
-	# const JACC.Array = CUDA.CuArray{T, N} where {T, N}
-	const JACC.JAT = JACCArrayType{CUDA.CuArray}()
+	const JACC.JAT = JACC.JACCArrayType{CUDA.CuArray}()
 end
 
 end # module JACCCUDA
