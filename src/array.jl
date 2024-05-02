@@ -3,11 +3,11 @@ function default_eltype()
 end
 
 function zeros(T::Type, dims...)
-	return fill!(similar(JACC.Array{T}, dims...), zero(T))
+	return fill!(similar(arraytype(){T}, dims...), zero(T))
 end
 
 function ones(T::Type, dims...)
-	return fill!(similar(JACC.Array{T}, dims...), one(T))
+	return fill!(similar(arraytype(){T}, dims...), one(T))
 end
 
 function zeros(dims...)
