@@ -12,6 +12,10 @@ function set_backend(new_backend::String)
 
     # Set it in our runtime values, as well as saving it to disk
     @set_preferences!("backend"=>new_backend_lc)
+    ## Technically you don't need to restart Julia to make the backend take effect.
+    ## One just needs to rerun the `__init()__` function. Also if you don't load the 
+    ## backend that matches the `backend` variable Array = Base.Array which could cause
+    ## issues in ones code.
     @info("New backend set; restart your Julia session for this change to take effect!")
 end
 
