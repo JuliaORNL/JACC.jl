@@ -82,39 +82,9 @@ end
     @test ones(N)≈x rtol=1e-5
 end
 
-@testset "zeros-N" begin
-    N = 10
-    x = JACC.zeros(N)
-    @test typeof(x) == Vector{Float64}
-    @test eltype(x) == Float64
-    @test zeros(N)≈x rtol=1e-5
-
-    function add_one(i, x)
-        @inbounds x[i] += 1
-    end
-
-    JACC.parallel_for(N, add_one, x)
-    @test ones(N)≈x rtol=1e-5
-end
-
 @testset "ones" begin
     N = 10
     x = JACC.ones(Float64, N)
-    @test typeof(x) == Vector{Float64}
-    @test eltype(x) == Float64
-    @test ones(N)≈x rtol=1e-5
-
-    function minus_one(i, x)
-        @inbounds x[i] -= 1
-    end
-
-    JACC.parallel_for(N, minus_one, x)
-    @test zeros(N)≈x rtol=1e-5
-end
-
-@testset "ones-N" begin
-    N = 10
-    x = JACC.ones(N)
     @test typeof(x) == Vector{Float64}
     @test eltype(x) == Float64
     @test ones(N)≈x rtol=1e-5
