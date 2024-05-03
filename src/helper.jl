@@ -1,8 +1,8 @@
 
 macro maybe_threaded(ex)
-	if Threads.nthreads() == 1
-		return esc(ex)
-	else
-		return esc(:(Threads.@threads :static $ex))
-	end
+    if Threads.nthreads() == 1
+        return esc(ex)
+    else
+        return esc(:(Threads.@threads :static $ex))
+    end
 end
