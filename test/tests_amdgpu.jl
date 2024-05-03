@@ -82,42 +82,11 @@ end
     @test ones(N)≈Array(x) rtol=1e-5
 end
 
-@testset "zeros-N" begin
-    N = 10
-    x = JACC.zeros(N)
-    # default is Float32, unlike on CPU Float64
-    @test typeof(x) == AMDGPU.ROCArray{Float32, 1, AMDGPU.Runtime.Mem.HIPBuffer}
-    @test eltype(x) == Float32
-    @test zeros(N)≈Array(x) rtol=1e-5
-
-    function add_one(i, x)
-        @inbounds x[i] += 1
-    end
-
-    JACC.parallel_for(N, add_one, x)
-    @test ones(N)≈Array(x) rtol=1e-5
-end
-
 @testset "ones" begin
     N = 10
     x = JACC.ones(Float64, N)
     @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
     @test eltype(x) == Float64
-    @test ones(N)≈Array(x) rtol=1e-5
-
-    function minus_one(i, x)
-        @inbounds x[i] -= 1
-    end
-
-    JACC.parallel_for(N, minus_one, x)
-    @test zeros(N)≈Array(x) rtol=1e-5
-end
-
-@testset "ones-N" begin
-    N = 10
-    x = JACC.ones(N)
-    @test typeof(x) == AMDGPU.ROCArray{Float32, 1, AMDGPU.Runtime.Mem.HIPBuffer}
-    @test eltype(x) == Float32
     @test ones(N)≈Array(x) rtol=1e-5
 
     function minus_one(i, x)
