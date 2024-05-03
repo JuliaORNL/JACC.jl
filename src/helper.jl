@@ -6,3 +6,9 @@ macro maybe_threaded(ex)
         return esc(:(Threads.@threads :static $ex))
     end
 end
+
+struct JACCArrayType{T}
+end
+
+arraytype() = arraytype(JACC.JAT)
+arraytype(::JACCArrayType{T}) where {T} = T
