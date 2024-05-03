@@ -25,8 +25,8 @@ function parallel_for(::JACCArrayType{<:Array},
 end
 
 function parallel_reduce(::JACCArrayType{<:Array}, N::Integer, f::Function, x...)
-	tmp = zeros(Threads.nthreads())
-	ret = zeros(1)
+	tmp = Base.zeros(Threads.nthreads())
+	ret = Base.zeros(1)
 	@maybe_threaded for i in 1:N
 			tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, x...)
 	end
@@ -38,8 +38,8 @@ end
 
 function parallel_reduce(::JACCArrayType{<:Array},
 			(M, N)::Tuple{Integer, Integer}, f::Function, x...)
-	tmp = zeros(Threads.nthreads())
-	ret = zeros(1)
+	tmp = Base.zeros(Threads.nthreads())
+	ret = Base.zeros(1)
 	@maybe_threaded for j in 1:N
 			for i in 1:M
 					tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, j, x...)
