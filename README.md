@@ -48,7 +48,7 @@ For an app integration example see the [GrayScott.jl JACC branch](https://github
 
 Funded by the US Department of Energy Advanced Scientific Computing Research (ASCR) projects:
 
-- PESO and S4PST as part of the Next Generation of Scientific Software Technologies (NGSST)
+- S4PST and PESO as part of the Next Generation of Scientific Software Technologies (NGSST)
 - [Bluestone X-Stack](https://csmd.ornl.gov/Bluestone)
 
 Past sponsors:
