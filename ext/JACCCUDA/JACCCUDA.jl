@@ -309,7 +309,7 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
     return nothing
 end
 
-arraytype(::Val{:cuda}) = Array
+JACC.arraytype(::Val{:cuda}) = CuArray
 
 function __init__()
 end

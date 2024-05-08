@@ -300,7 +300,7 @@ function reduce_kernel_oneapi_MN((M, N), red, ret)
     return nothing
 end
 
-arraytype(::Val{:oneapi}) = oneArray
+JACC.arraytype(::Val{:oneapi}) = oneArray
 
 function __init__()
 end

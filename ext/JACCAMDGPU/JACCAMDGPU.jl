@@ -306,7 +306,7 @@ function reduce_kernel_amdgpu_MN((M, N), red, ret)
     return nothing
 end
 
-arraytype(::Val{:amdgpu}) = ROCArray
+JACC.arraytype(::Val{:amdgpu}) = ROCArray
 
 function __init__()
 end
