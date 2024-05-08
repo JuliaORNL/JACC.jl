@@ -300,9 +300,9 @@ function reduce_kernel_oneapi_MN((M, N), red, ret)
     return nothing
 end
 
+arraytype(::Val{:oneapi}) = oneArray
+
 function __init__()
-    # const JACC.Array = oneAPI.oneArray{T, N} where {T, N}
-    const JACC.JAT = JACCArrayType{oneArray}()
 end
 
 end # module JACCONEAPI

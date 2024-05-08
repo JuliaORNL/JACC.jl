@@ -10,5 +10,7 @@ end
 struct JACCArrayType{T}
 end
 
-arraytype() = arraytype(JACC.JAT)
-arraytype(::JACCArrayType{T}) where {T} = T
+arraytype() = arraytype(Val(Symbol(JACCPreferences.backend)))
+arraytype(::Val{:threads}) = Array
+arraytype(J::JACCArrayType) = arraytype(typeof(J))
+arraytype(::Type{<:JACCArrayType{T}}) where {T} = T

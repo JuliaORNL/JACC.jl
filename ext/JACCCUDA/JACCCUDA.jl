@@ -309,9 +309,9 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
     return nothing
 end
 
+arraytype(::Val{:cuda}) = Array
+
 function __init__()
-    # const JACC.Array = CUDA.CuArray{T, N} where {T, N}
-    const JACC.JAT = JACCArrayType{CuArray}()
 end
 
 end # module JACCCUDA

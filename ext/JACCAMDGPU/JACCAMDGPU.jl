@@ -306,9 +306,9 @@ function reduce_kernel_amdgpu_MN((M, N), red, ret)
     return nothing
 end
 
+arraytype(::Val{:amdgpu}) = ROCArray
+
 function __init__()
-    # const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
-    const JACC.JAT = JACCArrayType{ROCArray}()
 end
 
 end # module JACCAMDGPU
