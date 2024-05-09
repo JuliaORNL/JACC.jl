@@ -1,5 +1,5 @@
-import AMDGPU
-import JACC
+using AMDGPU
+using JACC
 using Test
 
 @testset "TestBackend" begin
@@ -15,7 +15,7 @@ end
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
 
-    a_device = JACC.Array(a)
+    a_device = JACC.array(a)
     JACC.parallel_for(N, f, a_device)
 
     a_expected = a .+ 5.0
@@ -39,8 +39,8 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_device = JACC.Array(x)
-    y_device = JACC.Array(y)
+    x_device = JACC.array(x)
+    y_device = JACC.array(y)
     JACC.parallel_for(N, axpy, alpha, x_device, y_device)
 
     x_expected = x
@@ -59,9 +59,9 @@ end
     # Generate random vectors x and y of length N for the interval [0, 100]
     alpha = 2.5
 
-    x = JACC.Array(round.(rand(Float32, N) * 100))
-    y = JACC.Array(round.(rand(Float32, N) * 100))
-    counter = JACC.Array{Int32}([0])
+    x = JACC.array(round.(rand(Float32, N) * 100))
+    y = JACC.array(round.(rand(Float32, N) * 100))
+    counter = JACC.array(Int32[0])
     JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
 
     @test Array(counter)[1] == N

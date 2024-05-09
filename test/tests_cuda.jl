@@ -1,5 +1,5 @@
 using CUDA
-import JACC
+using JACC
 using Test
 
 @testset "TestBackend" begin
