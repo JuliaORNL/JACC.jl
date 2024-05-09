@@ -133,7 +133,7 @@ function reduce_kernel_amdgpu(N, red, ret)
             tmp += @inbounds red[ii]
             ii += 512
         end
-    else
+    elseif (i <= N)
         tmp = @inbounds red[i]
     end
     shared_mem[i] = tmp

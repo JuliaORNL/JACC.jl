@@ -8,6 +8,9 @@ include("helper.jl")
 # overloaded array functions
 include("array.jl")
 
+include("JACCBLAS.jl")
+using .BLAS
+
 export Array, @atomic
 export parallel_for
 
