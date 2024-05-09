@@ -10,15 +10,12 @@ include("array.jl")
 
 export parallel_for
 
-function JACC_BACKEND_TYPE()
-    return JACCArrayType{arraytype(Val(Symbol(JACCPreferences.backend)))}()
-end
 function parallel_for(N, f::Function, x...)
-	return parallel_for(JACC_BACKEND_TYPE(), N, f, x...)
+	return parallel_for(JACCPreferences.JACC_BACKEND_TYPE(), N, f, x...)
 end
 
 function parallel_reduce(N, f::Function, x...)
-	return parallel_reduce(JACC_BACKEND_TYPE(), N, f, x...)
+	return parallel_reduce(JACCPreferences.JACC_BACKEND_TYPE(), N, f, x...)
 end
 
 function __init__()
