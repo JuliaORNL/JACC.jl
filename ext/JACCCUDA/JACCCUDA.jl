@@ -128,7 +128,7 @@ end
 
 function reduce_kernel_cuda(N, red, ret)
     shared_mem = @cuDynamicSharedMem(Float64, 512)
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    i = threadIdx().x
     ii = i
     tmp::Float64 = 0.0
     if N > 512
@@ -136,10 +136,10 @@ function reduce_kernel_cuda(N, red, ret)
             tmp += @inbounds red[ii]
             ii += 512
         end
-    else
-        tmp = @inbounds red[i]
+    elseif (i <= N)
+          tmp = @inbounds red[i]
     end
-    shared_mem[i] = tmp
+    shared_mem[threadIdx().x] = tmp
     sync_threads()
     if (i <= 256)
         shared_mem[i] += shared_mem[i + 256]
