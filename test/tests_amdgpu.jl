@@ -96,3 +96,36 @@ end
     JACC.parallel_for(N, minus_one, x)
     @test zeros(N)≈Array(x) rtol=1e-5
 end
+
+#@testset "JACC.BLAS" begin
+
+#    function seq_axpy(N, alpha, x, y)
+#        for i in 1:N
+#            @inbounds x[i] += alpha * y[i]
+#        end
+#    end
+    
+#    function seq_dot(N, x, y)
+#        r = 0.0
+#        for i in 1:N
+#            @inbounds r += x[i] * y[i]
+#        end
+#        return r
+#    end
+    
+#    x = ones(1_000)
+#    y = ones(1_000)
+#    jx = JACC.ones(1_000)
+#    jy = JACC.ones(1_000)
+#    alpha = 2.0
+    
+#    seq_axpy(1_000, alpha, x, y)
+#    ref_result = seq_dot(1_000, x, y)
+    
+#    JACC.BLAS.axpy(1_000, alpha, jx, jy)
+#    jresult = JACC.BLAS.dot(1_000, jx, jy)
+#    result = Array(jresult)     
+    
+#    @test result[1]≈ref_result rtol=1e-8
+
+#end

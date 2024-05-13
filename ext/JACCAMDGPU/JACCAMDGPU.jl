@@ -32,7 +32,7 @@ function JACC.parallel_reduce(::JACCArrayType{<:ROCArray},
     @roc groupsize=threads gridsize=blocks _parallel_reduce_amdgpu(
         N, ret, f, x...)
     AMDGPU.synchronize()
-    @roc groupsize=threads gridsize=threads reduce_kernel_amdgpu(
+    @roc groupsize=threads gridsize=1 reduce_kernel_amdgpu(
         blocks, ret, rret)
     AMDGPU.synchronize()
     return rret
@@ -50,7 +50,7 @@ function JACC.parallel_reduce(::JACCArrayType{<:ROCArray},
     @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) _parallel_reduce_amdgpu_MN(
         (M, N), ret, f, x...)
     AMDGPU.synchronize()
-    @roc groupsize=(Mthreads, Nthreads) gridsize=(Mthreads, Nthreads) reduce_kernel_amdgpu_MN(
+    @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) reduce_kernel_amdgpu_MN(
         (Mblocks, Nblocks), ret, rret)
     AMDGPU.synchronize()
     return rret
@@ -123,7 +123,7 @@ end
 
 function reduce_kernel_amdgpu(N, red, ret)
     shared_mem = @ROCStaticLocalArray(Float64, 512)
-    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    i = workitemIdx().x
     ii = i
     tmp::Float64 = 0.0
     if N > 512
@@ -131,7 +131,7 @@ function reduce_kernel_amdgpu(N, red, ret)
             tmp += @inbounds red[ii]
             ii += 512
         end
-    else
+    elseif (i <= N)
         tmp = @inbounds red[i]
     end
     shared_mem[i] = tmp
@@ -221,8 +221,8 @@ end
 
 function reduce_kernel_amdgpu_MN((M, N), red, ret)
     shared_mem = @ROCStaticLocalArray(Float64, 256)
-    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
-    j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    i = workitemIdx().x
+    j = workitemIdx().y
     ii = i
     jj = j
 
