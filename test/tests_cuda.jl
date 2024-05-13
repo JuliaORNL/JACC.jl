@@ -150,10 +150,11 @@ end
         return r
     end
     
-    x = ones(1_000)
-    y = ones(1_000)
-    jx = JACC.ones(1_000)
-    jy = JACC.ones(1_000)
+    elt =  Float64
+    x = ones(elt, 1_000)
+    y = ones(elt, 1_000)
+    jx = JACC.ones(elt, 1_000)
+    jy = JACC.ones(elt, 1_000)
     alpha = 2.0
     
     seq_axpy(1_000, alpha, x, y)
