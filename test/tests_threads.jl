@@ -277,3 +277,36 @@ end
 
     @test f2≈df2 rtol=1e-1
 end
+
+@testset "JACC.BLAS" begin
+    
+    x = ones(1_000)
+    y = ones(1_000)
+    jx = JACC.ones(1_000)
+    jy = JACC.ones(1_000)
+    alpha = 2.0
+
+    function seq_axpy(N, alpha, x, y)
+        for i in 1:N
+            @inbounds x[i] += alpha * y[i]
+        end
+    end
+    
+    function seq_dot(N, x, y)
+        r = 0.0
+        for i in 1:N
+            @inbounds r += x[i] * y[i]
+        end
+        return r
+    end
+ 
+    seq_axpy(1_000, alpha, x, y)
+    ref_result = seq_dot(1_000, x, y)
+
+    JACC.BLAS.axpy(1_000, alpha, jx, jy)
+    jresult = JACC.BLAS.dot(1_000, jx, jy)
+    result = jresult[1]     
+    
+    @test result≈ref_result rtol=1e-8
+
+end
