@@ -279,11 +279,12 @@ end
 end
 
 @testset "JACC.BLAS" begin
-    
+    elt = Float64
+
     x = ones(1_000)
     y = ones(1_000)
-    jx = JACC.ones(1_000)
-    jy = JACC.ones(1_000)
+    jx = JACC.ones(elt, 1_000)
+    jy = JACC.ones(elt, 1_000)
     alpha = 2.0
 
     function seq_axpy(N, alpha, x, y)
