@@ -17,6 +17,8 @@ end
 
 const backend = @load_preference("backend", "threads")
 
+using JACC: JACCArrayType, arraytype
+
 function JACC_BACKEND_TYPE()
     return JACCArrayType{arraytype(Val(Symbol(JACCPreferences.backend)))}()
 end

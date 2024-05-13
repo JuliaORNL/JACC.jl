@@ -3,6 +3,7 @@ module JACC
 
 using Atomix: @atomic
 # module to set back end preferences 
+include("JACCArrayType.jl")
 include("JACCPreferences.jl")
 include("helper.jl")
 # overloaded array functions
