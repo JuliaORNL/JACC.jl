@@ -48,3 +48,38 @@ end
 
     @test Array(x_device)≈x_expected rtol=1e-1
 end
+
+@testset "JACC.BLAS" begin
+
+    function seq_axpy(N, alpha, x, y)
+        for i in 1:N
+            @inbounds x[i] += alpha * y[i]
+        end
+    end
+    
+    function seq_dot(N, x, y)
+        r = 0.0
+        for i in 1:N
+            @inbounds r += x[i] * y[i]
+        end
+        return r
+    end
+    
+    SIZE = Int32(1_000)
+    x = ones(Float32, SIZE)
+    y = ones(Float32, SIZE)
+    jx = JACC.ones(Float32, SIZE)
+    jy = JACC.ones(Float32, SIZE)
+    alpha = Float32(2.0)
+    
+    seq_axpy(SIZE, alpha, x, y)
+    ref_result = seq_dot(SIZE, x, y)
+    
+    JACC.BLAS.axpy(SIZE, alpha, jx, jy)
+    jresult = JACC.BLAS.dot(SIZE, jx, jy)
+    result = Array(jresult)     
+    
+    @test result[1]≈ref_result rtol=1e-8
+
+end
+
