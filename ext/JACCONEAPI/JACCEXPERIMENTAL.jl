@@ -48,10 +48,4 @@ function JACC.experimental.shared(x::oneDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-
-
-function shared(x::Base.Array{T,N}) where {T,N}
-  return x
-end
-
 end # module experimental
