@@ -22,7 +22,10 @@ end
 
 function JACC.parallel_for(
         (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    numThreads = 32
+    #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
+    # potential benefit from using shared memory.
+    #numThreads = 32
+    numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
     Mblocks = ceil(Int, M / Mthreads)
