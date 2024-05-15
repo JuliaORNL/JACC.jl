@@ -2,7 +2,12 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
+# overloaded array functions
 include("array.jl")
+
+# overloaded experimental functions
+include("JACCEXPERIMENTAL.jl")
+using .experimental
 
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512

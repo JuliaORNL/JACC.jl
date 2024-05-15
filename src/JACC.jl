@@ -11,6 +11,9 @@ include("array.jl")
 include("JACCBLAS.jl")
 using .BLAS
 
+include("JACCEXPERIMENTAL.jl")
+using .experimental
+
 export Array, @atomic
 export parallel_for
 
