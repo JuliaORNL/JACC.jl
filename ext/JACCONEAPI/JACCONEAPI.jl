@@ -1,7 +1,13 @@
-
 module JACCONEAPI
 
 using JACC, oneAPI
+
+# overloaded array functions
+include("array.jl")
+
+# overloaded experimental functions
+include("JACCEXPERIMENTAL.jl")
+using .experimental
 
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)

@@ -5,6 +5,10 @@ using JACC, CUDA
 # overloaded array functions
 include("array.jl")
 
+# overloaded experimental functions
+include("JACCEXPERIMENTAL.jl")
+using .experimental
+
 function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
@@ -18,13 +22,16 @@ end
 
 function JACC.parallel_for(
         (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    numThreads = 16
+    numThreads = 32
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _parallel_for_cuda_MN(
         f, x...)
+    # To use JACC.shared, we need to define shmem size using the dynamic shared memory API. The size should be the biggest size of shared memory available for the GPU
+    #CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = 4 * numThreads * numThreads * sizeof(Float64) _parallel_for_cuda_MN(
+    #    f, x...)
 end
 
 function JACC.parallel_reduce(
