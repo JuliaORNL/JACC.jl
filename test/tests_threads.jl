@@ -1,10 +1,6 @@
 import JACC
 using Test
 
-@testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "threads"
-end
-
 @testset "VectorAddLambda" begin
     function f(x, a)
         @inbounds a[x] += 5.0
@@ -14,9 +10,10 @@ end
     a = round.(rand(Float32, dims) * 100)
     a_expected = a .+ 5.0
 
+    a = JACC.array(a)
     JACC.parallel_for(10, f, a)
 
-    @test a≈a_expected rtol=1e-5
+    @test Array(a)≈a_expected rtol=1e-5
 end
 
 @testset "AXPY" begin
@@ -45,7 +42,7 @@ end
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)
 
-    @test x_host_JACC≈x_expected rtol=1e-1
+    @test Array(x_host_JACC)≈x_expected rtol=1e-1
 end
 
 @testset "AtomicCounter" begin
@@ -64,39 +61,39 @@ end
     counter = JACC.array(Int32[0])
     JACC.parallel_for(N, axpy_counter!, alpha, x_device, y_device, counter)
 
-    @test counter[1] == N
+    @test Array(counter)[1] == N
 end
 
 @testset "zeros" begin
     elt = Float32
     N = 10
     x = JACC.zeros(elt, N)
-    @test typeof(x) == Vector{elt}
+    @test typeof(x) <: JACC.arraytype(){elt,1}
     @test eltype(x) == elt
-    @test zeros(N)≈x rtol=1e-5
+    @test JACC.arraytype()(zeros(N))≈x rtol=1e-5
 
     function add_one(i, x)
         @inbounds x[i] += 1
     end
 
     JACC.parallel_for(N, add_one, x)
-    @test ones(N)≈x rtol=1e-5
+    @test JACC.arraytype()(ones(N)) ≈ x rtol=1e-5
 end
 
 @testset "ones" begin
     elt = Float64
     N = 10
     x = JACC.ones(elt, N)
-    @test typeof(x) == Vector{elt}
+    @test typeof(x) <: JACC.arraytype(){elt,1}
     @test eltype(x) == elt
-    @test ones(N)≈x rtol=1e-5
+    @test JACC.arraytype()(ones(N)) ≈ x rtol=1e-5
 
     function minus_one(i, x)
         @inbounds x[i] -= 1
     end
 
     JACC.parallel_for(N, minus_one, x)
-    @test zeros(N)≈x rtol=1e-5
+    @test JACC.arraytype()(zeros(N)) ≈ x rtol=1e-5
 end
 
 @testset "CG" begin
@@ -127,9 +124,9 @@ end
     a1 = a1 * 4
     r = r * 0.5
     p = p * 0.5
-    global cond = one(Float64)
+    global cond = ones(Float64,1)
 
-    while cond[1, 1] >= 1e-14
+    while Array(cond)[1] >= 1e-14
         r_old = copy(r)
 
         JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
@@ -154,7 +151,7 @@ end
         global cond = ccond
         p = copy(r_aux)
     end
-    @test cond[1, 1] <= 1e-14
+    @test Array(cond)[1] <= 1e-14
 end
 
 @testset "LBM" begin
@@ -258,7 +255,7 @@ end
 
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
-    @test f2≈df2 rtol=1e-1
+    @test JACC.arraytype()(f2) ≈ df2 rtol=1e-1
 end
 
 @testset "JACC.BLAS" begin
@@ -289,7 +286,7 @@ end
 
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
     jresult = JACC.BLAS.dot(1_000, jx, jy)
-    result = jresult[1]     
+    result = Array(jresult)[1]     
     
     @test result≈ref_result rtol=1e-8
 
