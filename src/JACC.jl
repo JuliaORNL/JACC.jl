@@ -13,6 +13,9 @@ include("array.jl")
 include("JACCBLAS.jl")
 using .BLAS
 
+include("JACCEXPERIMENTAL.jl")
+using .experimental
+
 export parallel_for
 
 function parallel_for(N, f::Function, x...)

@@ -2,6 +2,11 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 using JACC: JACCArrayType
+
+# overloaded experimental functions
+include("JACCEXPERIMENTAL.jl")
+using .experimental
+
 function JACC.parallel_for(::JACCArrayType{<:ROCArray}, N::Integer, f::Function, x...)
     numThreads = 512
     threads = min(N, numThreads)

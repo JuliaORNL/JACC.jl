@@ -2,6 +2,10 @@ module JACCCUDA
 
 using JACC, CUDA
 using JACC: JACCArrayType
+
+include("JACCEXPERIMENTAL.jl")
+using .experimental
+
 function JACC.parallel_for(::JACCArrayType{<:CuArray}, N::Integer, f::Function, x...)
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
@@ -15,6 +19,9 @@ end
 
 function JACC.parallel_for(::JACCArrayType{<:CuArray},
         (M, N)::Tuple{Integer, Integer}, f::Function, x...)
+    #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
+    # potential benefit from using shared memory.
+    #numThreads = 32
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -22,6 +29,9 @@ function JACC.parallel_for(::JACCArrayType{<:CuArray},
     Nblocks = ceil(Int, N / Nthreads)
     CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _parallel_for_cuda_MN(
         f, x...)
+    # To use JACC.shared, we need to define shmem size using the dynamic shared memory API. The size should be the biggest size of shared memory available for the GPU
+    #CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = 4 * numThreads * numThreads * sizeof(Float64) _parallel_for_cuda_MN(
+    #    f, x...)
 end
 
 function JACC.parallel_reduce(::JACCArrayType{<:CuArray},
