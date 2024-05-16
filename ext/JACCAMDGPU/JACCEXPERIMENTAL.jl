@@ -2,7 +2,8 @@ module experimental
 
 using JACC, AMDGPU
 
-function JACC.experimental.shared(x::ROCDeviceArray{T,N}) where {T,N}
+function JACC.experimental.shared(x::ROCDeviceArray)
+  T = eltype(x)
   size = length(x)
   shmem = @ROCDynamicLocalArray(T, size)
   num_threads = workgroupDim().x * workgroupDim().y
