@@ -2,7 +2,8 @@ module experimental
 
 using JACC, CUDA
 
-function JACC.experimental.shared(x::CuDeviceArray{T,N}) where {T,N}
+function JACC.experimental.shared(x::CuDeviceArray)
+  T = eltype(x)
   size = length(x)
   shmem = @cuDynamicSharedMem(T, size)
   num_threads = blockDim().x * blockDim().y

@@ -2,7 +2,8 @@ module experimental
 
 using JACC, oneAPI
 
-function JACC.experimental.shared(x::oneDeviceArray{T,N}) where {T,N}
+function JACC.experimental.shared(x::oneDeviceArray)
+  T = eltype(x)
   size = length(x)
   shmem = oneLocalArray(T, size)
   num_threads = get_local_size(0) * get_local_size(1)

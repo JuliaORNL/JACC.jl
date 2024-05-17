@@ -1,15 +1,12 @@
 module JACCCUDA
 
 using JACC, CUDA
+using JACC: JACCArrayType
 
-# overloaded array functions
-include("array.jl")
-
-# overloaded experimental functions
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::JACCArrayType{<:CuArray}, N::Integer, f::Function, x...)
     parallel_args = (N, f, x...)
     parallel_kargs = cudaconvert.(parallel_args)
     parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
@@ -20,8 +17,8 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_kernel(parallel_kargs...; threads = threads, blocks = blocks)
 end
 
-function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::JACCArrayType{<:CuArray},
+        (M, N)::Tuple{Integer, Integer}, f::Function, x...)
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
     #numThreads = 32
@@ -37,8 +34,8 @@ function JACC.parallel_for(
     #    f, x...)
 end
 
-function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::JACCArrayType{<:CuArray},
+        N::Integer, f::Function, x...)
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -51,8 +48,8 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(::JACCArrayType{<:CuArray},
+        (M, N)::Tuple{Integer, Integer}, f::Function, x...)
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -322,8 +319,9 @@ function reduce_kernel_cuda_MN((M, N), red, ret)
     return nothing
 end
 
+JACC.arraytype(::Val{:cuda}) = CuArray
+
 function __init__()
-    const JACC.Array = CUDA.CuArray{T, N} where {T, N}
 end
 
 end # module JACCCUDA

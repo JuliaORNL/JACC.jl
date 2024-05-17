@@ -15,7 +15,7 @@ end
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
 
-    a_device = JACC.Array(a)
+    a_device = JACC.array(a)
     JACC.parallel_for(N, f, a_device)
 
     a_expected = a .+ 5.0
@@ -39,8 +39,8 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha::Float32 = 2.5
 
-    x_device = JACC.Array(x)
-    y_device = JACC.Array(y)
+    x_device = JACC.array(x)
+    y_device = JACC.array(y)
     JACC.parallel_for(N, axpy, alpha, x_device, y_device)
 
     x_expected = x
