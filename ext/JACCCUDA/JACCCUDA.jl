@@ -14,10 +14,28 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     parallel_kargs = cudaconvert.(parallel_args)
     parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
     parallel_kernel = cufunction(_parallel_for_cuda, parallel_tt)
-    maxPossibleThreads = CUDA.maxthreads(parallel_kernel)
-    threads = min(N, maxPossibleThreads)
+    maxThreads = CUDA.maxthreads(parallel_kernel)
+    threads = min(N, maxThreads)
     blocks = ceil(Int, N / threads)
     parallel_kernel(parallel_kargs...; threads = threads, blocks = blocks)
+end
+
+abstract type BlockIndexer2D end
+
+struct BlockIndexerBasic <: BlockIndexer2D end
+
+function (blkIter::BlockIndexerBasic)(blockIdx, blockDim, threadIdx)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    return (i, j)
+end
+
+struct BlockIndexerSwapped <: BlockIndexer2D end
+
+function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
+    j = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    i = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    return (i, j)
 end
 
 function JACC.parallel_for(
@@ -25,13 +43,47 @@ function JACC.parallel_for(
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
     #numThreads = 32
-    numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
-    Mblocks = ceil(Int, M / Mthreads)
-    Nblocks = ceil(Int, N / Nthreads)
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _parallel_for_cuda_MN(
-        f, x...)
+
+    dev = CUDA.device()
+    maxBlocks = (
+        x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
+        y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y),
+    )
+    indexer = BlockIndexerBasic()
+    m, n = (M, N)
+    if M < N && maxBlocks.x > maxBlocks.y
+        indexer = BlockIndexerSwapped()
+        m, n = (N, M)
+    end
+
+    parallel_args = (indexer, (M, N), f, x...)
+    parallel_kargs = cudaconvert.(parallel_args)
+    parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
+    parallel_kernel = cufunction(_parallel_for_cuda_MN, parallel_tt)
+    maxThreads = CUDA.maxthreads(parallel_kernel)
+    blockAttrs = (
+        max_x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
+        max_y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
+        total = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK))
+    x_thr = min(
+        blockAttrs.max_x,
+        nextpow(2, m / blockAttrs.total + 1),
+        blockAttrs.total,
+        maxThreads
+    )
+    y_thr = min(
+        blockAttrs.max_y,
+        ceil(Int, blockAttrs.total / x_thr),
+        ceil(Int, maxThreads / x_thr),
+    )
+    threads = (x_thr, y_thr)
+    blocks = (
+        ceil(Int, (m - 1) / x_thr + 1),
+        ceil(Int, (n - 1) / y_thr + 1),
+    )
+
+    parallel_kernel(parallel_kargs...; threads = threads, blocks = blocks)
+
     # To use JACC.shared, we need to define shmem size using the dynamic shared memory API. The size should be the biggest size of shared memory available for the GPU
     #CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = 4 * numThreads * numThreads * sizeof(Float64) _parallel_for_cuda_MN(
     #    f, x...)
@@ -72,15 +124,15 @@ end
 
 function _parallel_for_cuda(N, f, x...)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    if i <= N
-        f(i, x...)
-    end
+    i > N && return
+    f(i, x...)
     return nothing
 end
 
-function _parallel_for_cuda_MN(f, x...)
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+function _parallel_for_cuda_MN(indexer::T, (M, N), f, x...) where {T<:BlockIndexer2D}
+    i, j = indexer(blockIdx, blockDim, threadIdx)
+    i > M && return
+    j > N && return
     f(i, j, x...)
     return nothing
 end
