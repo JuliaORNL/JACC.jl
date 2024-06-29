@@ -28,6 +28,20 @@ function JACC.parallel_for(
         f, x...)
 end
 
+function JACC.parallel_for(
+        (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+    maxPossibleItems = 16
+    Litems = min(M, maxPossibleItems)
+    Mitems = min(M, maxPossibleItems)
+    Nitems = 1
+    Lgroups = ceil(Int, L / Litems)
+    Mgroups = ceil(Int, M / Mitems)
+    Ngroups = ceil(Int, N / Nitems)
+    oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
+        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN(
+        f, x...)
+end
+
 function JACC.parallel_reduce(
         N::I, f::F, x...) where {I <: Integer, F <: Function}
     numItems = 256
@@ -64,9 +78,17 @@ function _parallel_for_oneapi(f, x...)
 end
 
 function _parallel_for_oneapi_MN(f, x...)
-    i = get_global_id(0)
-    j = get_global_id(1)
+    j = get_global_id(0)
+    i = get_global_id(1)
     f(i, j, x...)
+    return nothing
+end
+
+function _parallel_for_oneapi_LMN(f, x...)
+    k = get_global_id(0)
+    j = get_global_id(1)
+    i = get_global_id(2)
+    f(i, j, k, x...)
     return nothing
 end
 
