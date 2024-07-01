@@ -85,9 +85,9 @@ function _parallel_for_oneapi_MN(f, x...)
 end
 
 function _parallel_for_oneapi_LMN(f, x...)
-    k = get_global_id(0)
+    i = get_global_id(0)
     j = get_global_id(1)
-    i = get_global_id(2)
+    k = get_global_id(2)
     f(i, j, k, x...)
     return nothing
 end

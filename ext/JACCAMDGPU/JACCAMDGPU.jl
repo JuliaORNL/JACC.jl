@@ -32,7 +32,7 @@ end
 function JACC.parallel_for(
         (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
-    numThreads = 16
+    numThreads = 32
     Lthreads = min(L, numThreads)
     Mthreads = min(M, numThreads)
     Nthreads = 1
@@ -93,9 +93,9 @@ function _parallel_for_amdgpu_MN(f, x...)
 end
 
 function _parallel_for_amdgpu_LMN(f, x...)
-    k = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
-    i = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
+    k = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
     f(i, j, k, x...)
     return nothing
 end
