@@ -42,8 +42,7 @@ function JACC.parallel_for(
         I <: Integer, F <: Function}
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
-    #numThreads = 32
-    numThreads = 16
+    numThreads = 32
     Lthreads = min(L, numThreads)
     Mthreads = min(M, numThreads)
     Nthreads = 1
@@ -106,9 +105,9 @@ function _parallel_for_cuda_MN(f, x...)
 end
 
 function _parallel_for_cuda_LMN(f, x...)
-    k = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    i = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
     f(i, j, k, x...)
     return nothing
 end
