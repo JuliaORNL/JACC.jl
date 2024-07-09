@@ -34,8 +34,8 @@ function JACC.parallel_for(
         I <: Integer, F <: Function}
     numThreads = 32
     Lthreads = min(L, numThreads)
-    Mthreads = min(M, numThreads)
-    Nthreads = 1
+    Mthreads = 1
+    Nthreads = min(M, numThreads)
     Lblocks = ceil(Int, L / Lthreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
