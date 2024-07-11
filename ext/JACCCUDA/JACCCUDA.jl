@@ -89,6 +89,25 @@ function JACC.parallel_for(
     #    f, x...)
 end
 
+function JACC.parallel_for(
+        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        I <: Integer, F <: Function}
+    #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
+    # potential benefit from using shared memory.
+    numThreads = 32
+    Lthreads = min(L, numThreads)
+    Mthreads = min(M, numThreads)
+    Nthreads = 1
+    Lblocks = ceil(Int, L / Lthreads)
+    Mblocks = ceil(Int, M / Mthreads)
+    Nblocks = ceil(Int, N / Nthreads)
+    CUDA.@sync @cuda threads=(Lthreads, Mthreads, Nthreads) blocks=(Lblocks,
+        Mblocks, Nblocks) _parallel_for_cuda_LMN(f, x...)
+    # To use JACC.shared, we need to define shmem size using the dynamic shared memory API. The size should be the biggest size of shared memory available for the GPU
+    #CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = 4 * numThreads * numThreads * sizeof(Float64) _parallel_for_cuda_MN(
+    #    f, x...)
+end
+
 function JACC.parallel_reduce(
         N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
@@ -131,9 +150,17 @@ end
 
 function _parallel_for_cuda_MN(indexer::T, (M, N), f, x...) where {T<:BlockIndexer2D}
     i, j = indexer(blockIdx, blockDim, threadIdx)
-    i > M && return
-    j > N && return
+    i > M && return nothing
+    j > N && return nothing
     f(i, j, x...)
+    return nothing
+end
+
+function _parallel_for_cuda_LMN(f, x...)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+    f(i, j, k, x...)
     return nothing
 end
 
@@ -199,7 +226,7 @@ function reduce_kernel_cuda(N, red, ret)
             ii += 512
         end
     elseif (i <= N)
-          tmp = @inbounds red[i]
+        tmp = @inbounds red[i]
     end
     shared_mem[threadIdx().x] = tmp
     sync_threads()

@@ -1,7 +1,7 @@
 name = "JACC"
 uuid = "0979c8fe-16a4-4796-9b82-89a9f10403ea"
 authors = ["pedrovalerolara <valerolarap@ornl.gov>", "williamfgc <williamfgc@yahoo.com>"]
-version = "0.0.4"
+version = "0.0.5"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"

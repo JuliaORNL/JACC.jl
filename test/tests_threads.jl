@@ -279,7 +279,6 @@ end
 end
 
 @testset "JACC.BLAS" begin
-    
     x = ones(1_000)
     y = ones(1_000)
     jx = JACC.ones(1_000)
@@ -291,7 +290,7 @@ end
             @inbounds x[i] += alpha * y[i]
         end
     end
-    
+
     function seq_dot(N, x, y)
         r = 0.0
         for i in 1:N
@@ -299,14 +298,57 @@ end
         end
         return r
     end
- 
+
     seq_axpy(1_000, alpha, x, y)
     ref_result = seq_dot(1_000, x, y)
 
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
     jresult = JACC.BLAS.dot(1_000, jx, jy)
-    result = jresult[1]     
-    
-    @test result≈ref_result rtol=1e-8
+    result = jresult[1]
 
+    @test result≈ref_result rtol=1e-8
+end
+
+# 2D 
+@testset "Add-2D" begin
+    function add!(i, j, A, B, C)
+        @inbounds C[i, j] = A[i, j] + B[i, j]
+    end
+
+    M = 10
+    N = 10
+    A = JACC.Array(ones(Float32, M, N))
+    B = JACC.Array(ones(Float32, M, N))
+    C = JACC.Array(zeros(Float32, M, N))
+
+    JACC.parallel_for((M, N), add!, A, B, C)
+
+    C_expected = Float32(2.0) .* ones(Float32, M, N)
+    @test C≈C_expected rtol=1e-5
+end
+
+@testset "Add-3D" begin
+    function add!(i, j, k, A, B, C)
+        @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
+    end
+
+    L = 10
+    M = 10
+    N = 10
+    A = JACC.Array(ones(Float32, L, M, N))
+    B = JACC.Array(ones(Float32, L, M, N))
+    C = JACC.Array(zeros(Float32, L, M, N))
+
+    for i in 1:L
+        for j in 1:M
+            for k in 1:N
+                C[i, j, k] = A[i, j, k] + B[i, j, k]
+            end
+        end
+    end
+
+    JACC.parallel_for((L, M, N), add!, A, B, C)
+
+    C_expected = Float32(2.0) .* ones(Float32, L, M, N)
+    @test C≈C_expected rtol=1e-5
 end

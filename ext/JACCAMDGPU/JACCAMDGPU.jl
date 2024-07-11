@@ -29,6 +29,22 @@ function JACC.parallel_for(
     AMDGPU.synchronize()
 end
 
+function JACC.parallel_for(
+        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        I <: Integer, F <: Function}
+    numThreads = 32
+    Lthreads = 1
+    Mthreads = min(L, numThreads)
+    Nthreads = min(M, numThreads)
+    Lblocks = ceil(Int, L / Lthreads)
+    Mblocks = ceil(Int, M / Mthreads)
+    Nblocks = ceil(Int, N / Nthreads)
+    @roc groupsize=(Lthreads, Mthreads, Nthreads) gridsize=(
+        Lblocks, Mblocks, Nblocks) _parallel_for_amdgpu_LMN(
+        f, x...)
+    AMDGPU.synchronize()
+end
+
 function JACC.parallel_reduce(
         N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
@@ -73,6 +89,14 @@ function _parallel_for_amdgpu_MN(f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     f(i, j, x...)
+    return nothing
+end
+
+function _parallel_for_amdgpu_LMN(f, x...)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    k = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
+    f(i, j, k, x...)
     return nothing
 end
 
