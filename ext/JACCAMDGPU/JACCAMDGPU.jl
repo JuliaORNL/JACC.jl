@@ -33,9 +33,9 @@ function JACC.parallel_for(
         (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     numThreads = 32
-    Lthreads = 1
-    Mthreads = min(L, numThreads)
-    Nthreads = min(M, numThreads)
+    Lthreads = min(L, numThreads)
+    Mthreads = min(M, numThreads)
+    Nthreads = 1
     Lblocks = ceil(Int, L / Lthreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
