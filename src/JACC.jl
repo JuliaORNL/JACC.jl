@@ -34,6 +34,19 @@ function parallel_for(
     end
 end
 
+function parallel_for(
+        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        I <: Integer, F <: Function}
+    # only threaded at the first level (no collapse equivalent)
+    @maybe_threaded for k in 1:N
+        for j in 1:M
+            for i in 1:L
+                f(i, j, k, x...)
+            end
+        end
+    end
+end
+
 function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
     tmp = zeros(Threads.nthreads())
     ret = zeros(1)
