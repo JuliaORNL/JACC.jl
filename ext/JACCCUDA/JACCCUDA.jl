@@ -34,7 +34,7 @@ function JACC.parallel_for(
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_MN(f, x...)
+    CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_MN(f, x...)
 end
 
 function JACC.parallel_for(
@@ -49,11 +49,8 @@ function JACC.parallel_for(
     Lblocks = ceil(Int, L / Lthreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
-    CUDA.@sync @cuda threads=(Lthreads, Mthreads, Nthreads) blocks=(Lblocks,
-        Mblocks, Nblocks) _parallel_for_cuda_LMN(f, x...)
-    # To use JACC.shared, we need to define shmem size using the dynamic shared memory API. The size should be the biggest size of shared memory available for the GPU
-    #CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem = 4 * numThreads * numThreads * sizeof(Float64) _parallel_for_cuda_MN(
-    #    f, x...)
+    shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    CUDA.@sync @cuda threads = (Lthreads, Mthreads, Nthreads) blocks = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_LMN(f, x...)
 end
 
 function JACC.parallel_reduce(
