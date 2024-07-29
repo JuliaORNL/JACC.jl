@@ -13,7 +13,10 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
-    @roc groupsize=threads gridsize=blocks _parallel_for_amdgpu(f, x...)
+    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
+    shmem_size = 2 * threads * sizeof(Float64)
+    @roc groupsize = threads gridsize = blocks shmem = shmem_size _parallel_for_amdgpu(f, x...)
     AMDGPU.synchronize()
 end
 
@@ -24,8 +27,10 @@ function JACC.parallel_for(
     Nthreads = min(N, numThreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
-    @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) _parallel_for_amdgpu_MN(
-        f, x...)
+    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
+    shmem_size = 2 * Mthreads * Nthreads * sizeof(Float64)
+    @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_MN(f, x...)
     AMDGPU.synchronize()
 end
 
@@ -39,9 +44,10 @@ function JACC.parallel_for(
     Lblocks = ceil(Int, L / Lthreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
-    @roc groupsize=(Lthreads, Mthreads, Nthreads) gridsize=(
-        Lblocks, Mblocks, Nblocks) _parallel_for_amdgpu_LMN(
-        f, x...)
+    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
+    shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
+    @roc groupsize = (Lthreads, Mthreads, Nthreads) gridsize = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_LMN(f, x...)
     AMDGPU.synchronize()
 end
 
@@ -336,6 +342,53 @@ function reduce_kernel_amdgpu_MN((M, N), red, ret)
     end
     return nothing
 end
+
+function JACC.shared(x::ROCDeviceArray{T,N}) where {T,N}
+  size = length(x)
+  shmem = @ROCDynamicLocalArray(T, size)
+  num_threads = workgroupDim().x * workgroupDim().y
+  if (size <= num_threads)
+    if workgroupDim().y == 1
+      ind = workitemIdx().x
+      @inbounds shmem[ind] = x[ind]
+    else
+      i_local = workitemIdx().x
+      j_local = workitemIdx().y
+      ind = (i_local - 1) * workgroupDim().x + j_local
+      if ndims(x) == 1
+        @inbounds shmem[ind] = x[ind]
+      elseif ndims(x) == 2
+        @inbounds shmem[ind] = x[i_local,j_local]
+      end
+    end
+  else
+    if workgroupDim().y == 1
+      ind = workgroupIdx().x
+     for i in workgroupDim().x:workgroupDim().x:size
+       @inbounds shmem[ind] = x[ind]
+       ind += workgroupDim().x
+      end
+    else
+      i_local = workgroupIdx().x
+      j_local = workgroupIdx().y
+      ind = (i_local - 1) * workgroupDim().x + j_local
+      if ndims(x) == 1
+        for i in num_threads:num_threads:size
+          @inbounds shmem[ind] = x[ind]
+          ind += num_threads
+        end
+      elseif ndims(x) == 2
+        for i in num_threads:num_threads:size
+          @inbounds shmem[ind] = x[i_local,j_local]
+          ind += num_threads
+        end
+      end  
+    end
+  end
+  AMDGPU.sync_workgroup()
+  return shmem
+end
+
 
 function __init__()
     const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
