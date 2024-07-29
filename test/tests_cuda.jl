@@ -97,6 +97,28 @@ end
     @test zeros(N)≈Array(x) rtol=1e-5
 end
 
+@testset "shared" begin
+    N = 100
+    alpha = 2.5
+    x = JACC.ones(Float64, N)
+    x_shared = JACC.ones(Float64, N)
+    y = JACC.ones(Float64, N)
+
+    function scal(i, x, y, alpha)
+        @inbounds x[i] = y[i] * alpha
+    end
+    
+    function scal_shared(i, x, y, alpha)
+        y_shared = JACC.shared(y) 
+        @inbounds x[i] = y_shared[i] * alpha
+    end
+
+    JACC.parallel_for(N, scal, x, y, alpha)
+    JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
+    @test x≈x_shared rtol=1e-8
+end
+
+
 # @testset VectorAddLoop begin
 #     N = 1024
 #     A = JACC.Array{Float32}(1, N)
