@@ -14,7 +14,11 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
     groups = ceil(Int, N / items)
-    oneAPI.@sync @oneapi items=items groups=groups _parallel_for_oneapi(f, x...)
+    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    # We must know how to get the max shared memory to be used in oneAPI as it is done in CUDA
+    #shmem_size = 2 * threads * sizeof(Float64)
+    #oneAPI.@sync @oneapi items = items groups = groups shmem = shmem_size _parallel_for_oneapi(f, x...)
+    oneAPI.@sync @oneapi items = items groups = groups _parallel_for_oneapi(f, x...)
 end
 
 function JACC.parallel_for(
@@ -326,6 +330,53 @@ function reduce_kernel_oneapi_MN((M, N), red, ret)
         ret[1] = shared_mem[((i - 1) * 16) + j]
     end
     return nothing
+end
+
+function JACC.shared(x::oneDeviceArray{T,N}) where {T,N}
+  size::Int32 = length(x)
+  # This is wrong, we should use size not 512 ...
+  shmem = oneLocalArray(T, 512)
+  num_threads = get_local_size(0) * get_local_size(1)
+  if (size <= num_threads)
+    if get_local_size(1) == 1
+      ind = get_global_id(0)
+      @inbounds shmem[ind] = x[ind]
+    else
+      i_local = get_local_id(0)
+      j_local = get_local_id(1)
+      ind = i_local - 1 * get_local_size(0) + j_local
+      if ndims(x) == 1
+        @inbounds shmem[ind] = x[ind]
+      elseif ndims(x) == 2
+        @inbounds shmem[ind] = x[i_local,j_local]
+      end
+    end
+  else
+    if get_local_size(1) == 1
+      ind = get_local_id(0)
+      for i in get_local_size(0):get_local_size(0):size
+        @inbounds shmem[ind] = x[ind]
+        ind += get_local_size(0)
+      end
+    else
+      i_local = get_local_id(0)
+      j_local = get_local_id(1)
+      ind = (i_local - 1) * get_local_size(0) + j_local
+      if ndims(x) == 1
+        for i in num_threads:num_threads:size
+          @inbounds shmem[ind] = x[ind]
+          ind += num_threads
+        end
+      elseif ndims(x) == 2
+        for i in num_threads:num_threads:size
+          @inbounds shmem[ind] = x[i_local,j_local]
+          ind += num_threads
+       end
+      end  
+    end
+  end
+  barrier()
+  return shmem
 end
 
 function __init__()
