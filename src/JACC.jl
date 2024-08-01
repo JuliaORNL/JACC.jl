@@ -1,7 +1,9 @@
-__precompile__(false)
 module JACC
 
+global BackendTag
+
 import Atomix: @atomic
+
 # module to set back end preferences 
 include("JACCPreferences.jl")
 include("helper.jl")
@@ -19,67 +21,31 @@ export parallel_for
 
 global Array
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    @maybe_threaded for i in 1:N
-        f(i, x...)
-    end
+@inline function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+    _parallel_for_impl(BackendTag(), N, f, x...)
 end
 
-function parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    @maybe_threaded for j in 1:N
-        for i in 1:M
-            f(i, j, x...)
-        end
-    end
+@inline function parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+    _parallel_for_impl(BackendTag(), (M, N), f, x...)
 end
 
-function parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+@inline function parallel_for((L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
-    # only threaded at the first level (no collapse equivalent)
-    @maybe_threaded for k in 1:N
-        for j in 1:M
-            for i in 1:L
-                f(i, j, k, x...)
-            end
-        end
-    end
+    _parallel_for_impl(BackendTag(), (L,M,N), f, x...)
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
-    @maybe_threaded for i in 1:N
-        tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, x...)
-    end
-    for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
-    end
-    return ret
+@inline function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+    _parallel_reduce_impl(BackendTag(), N, f, x...)
 end
 
-function parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
-    @maybe_threaded for j in 1:N
-        for i in 1:M
-            tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, j, x...)
-        end
-    end
-    for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
-    end
-    return ret
+@inline function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+    _parallel_reduce_impl(BackendTag(), (M, N), f, x...)
 end
 
 function shared(x::Base.Array{T,N}) where {T,N}
   return x
 end
 
-function __init__()
-    const JACC.Array = Base.Array{T, N} where {T, N}
-end
+include("JACCThreads.jl")
 
 end # module JACC

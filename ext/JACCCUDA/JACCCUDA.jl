@@ -2,6 +2,8 @@ module JACCCUDA
 
 using JACC, CUDA
 
+struct CUDABackendTag end
+
 # overloaded array functions
 include("array.jl")
 
@@ -9,7 +11,7 @@ include("array.jl")
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_for_impl(::CUDABackendTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
     #parallel_args = (N, f, x...)
     #parallel_kargs = cudaconvert.(parallel_args)
     #parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
@@ -21,10 +23,12 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     #parallel_kernel(parallel_kargs...; threads = threads, blocks = blocks)
     CUDA.@sync @cuda threads = threads blocks = blocks shmem = shmem_size _parallel_for_cuda(N, f, x...)
+# 	threads = min(N, maxPossibleThreads)
+# 	blocks = ceil(Int, N / threads)
+# 	CUDA.@sync @cuda threads = threads blocks = blocks _parallel_for_cuda(f, x...)
 end
 
-function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_for_impl(::CUDABackendTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
     #numThreads = 32
@@ -37,7 +41,7 @@ function JACC.parallel_for(
     CUDA.@sync @cuda threads = (Mthreads, Nthreads) blocks = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_MN(f, x...)
 end
 
-function JACC.parallel_for(
+function JACC._parallel_for_impl(::CUDABackendTag,
         (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
@@ -53,8 +57,7 @@ function JACC.parallel_for(
     CUDA.@sync @cuda threads = (Lthreads, Mthreads, Nthreads) blocks = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_LMN(f, x...)
 end
 
-function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_reduce_impl(::CUDABackendTag, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -67,8 +70,7 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC._parallel_reduce_impl(::CUDABackendTag, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -401,6 +403,7 @@ end
 
 function __init__()
     const JACC.Array = CUDA.CuArray{T, N} where {T, N}
+    const JACC.BackendTag = CUDABackendTag
 end
 
 end # module JACCCUDA
