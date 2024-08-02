@@ -74,6 +74,10 @@ function parallel_reduce(
     return ret
 end
 
+function shared(x::Base.Array{T,N}) where {T,N}
+  return x
+end
+
 function __init__()
     const JACC.Array = Base.Array{T, N} where {T, N}
 end
