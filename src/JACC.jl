@@ -22,14 +22,14 @@ export parallel_for
 
 global Array
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function parallel_for(::Val{:threads}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     @maybe_threaded for i in 1:N
         f(i, x...)
     end
 end
 
 function parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:threads}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     @maybe_threaded for j in 1:N
         for i in 1:M
             f(i, j, x...)
@@ -38,7 +38,7 @@ function parallel_for(
 end
 
 function parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        ::Val{:threads}, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     # only threaded at the first level (no collapse equivalent)
     @maybe_threaded for k in 1:N
@@ -50,7 +50,7 @@ function parallel_for(
     end
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function parallel_reduce(::Val{:threads}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     tmp = zeros(Threads.nthreads())
     ret = zeros(1)
     @maybe_threaded for i in 1:N
@@ -63,7 +63,7 @@ function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
 end
 
 function parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:threads}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     tmp = zeros(Threads.nthreads())
     ret = zeros(1)
     @maybe_threaded for j in 1:N
@@ -81,8 +81,36 @@ function shared(x::Base.Array{T,N}) where {T,N}
   return x
 end
 
-function __init__()
-    const JACC.Array = Base.Array{T, N} where {T, N}
+array_type() = array_type(JACCPreferences._backend_dispatchable)
+array_type(::Val{:threads}) = Base.Array{T, N} where {T, N}
+function array_type(::Val{backend}) where backend
+    if backend == :cuda
+        mod = "CUDA"
+    elseif backend == :amdgpu
+        mod = "AMDGPU"
+    elseif backend == :oneapi
+        mod = "oneAPI"
+    else
+        mod = nothing
+    end
+    @error("""
+           Unavailable backend: $backend\n
+           $(mod !== nothing ? "Please do `using $(mod)` before `using JACC`" : "Backend must be one of: \"cuda\", \"amdgpu\", \"oneapi\"")
+           """)
+    throw(UnavailableBackendException())
+end
+struct UnavailableBackendException <: Exception end
+
+function init()
+    # FIXME: This is racey, and depends on the correct extension already being loaded
+    # A better solution may become available if module property access becomes dispatchable
+    try
+        JACC.eval(:(const JACC.Array = $array_type()))
+        return true
+    catch err
+        err isa UnavailableBackendException || rethrow(err)
+        return false
+    end
 end
 
 end # module JACC
