@@ -1,4 +1,3 @@
-__precompile__(false)
 module JACC
 
 import Atomix: @atomic
@@ -22,14 +21,14 @@ export parallel_for
 
 global Array
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function parallel_for(::Val{:threads}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     @maybe_threaded for i in 1:N
         f(i, x...)
     end
 end
 
 function parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:threads}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     @maybe_threaded for j in 1:N
         for i in 1:M
             f(i, j, x...)
@@ -38,7 +37,7 @@ function parallel_for(
 end
 
 function parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        ::Val{:threads}, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     # only threaded at the first level (no collapse equivalent)
     @maybe_threaded for k in 1:N
@@ -50,7 +49,7 @@ function parallel_for(
     end
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function parallel_reduce(::Val{:threads}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     tmp = zeros(Threads.nthreads())
     ret = zeros(1)
     @maybe_threaded for i in 1:N
@@ -63,7 +62,7 @@ function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
 end
 
 function parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:threads}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     tmp = zeros(Threads.nthreads())
     ret = zeros(1)
     @maybe_threaded for j in 1:N
@@ -81,8 +80,15 @@ function shared(x::Base.Array{T,N}) where {T,N}
   return x
 end
 
-function __init__()
-    const JACC.Array = Base.Array{T, N} where {T, N}
-end
+array_type() = array_type(JACCPreferences._backend_dispatchable)
+array_type(::Val{:threads}) = Base.Array{T, N} where {T, N}
+
+struct Array{T, N} end
+(::Type{Array{T, N}})(args...; kwargs...) where {T, N} =
+    array_type(){T, N}(args...; kwargs...)
+(::Type{Array{T}})(args...; kwargs...) where {T} =
+    array_type(){T}(args...; kwargs...)
+(::Type{Array})(args...; kwargs...) =
+    array_type()(args...; kwargs...)
 
 end # module JACC

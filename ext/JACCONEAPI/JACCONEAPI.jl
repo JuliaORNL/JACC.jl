@@ -9,7 +9,7 @@ include("array.jl")
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::Val{:oneapi}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
@@ -22,7 +22,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 end
 
 function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:oneapi}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
@@ -33,7 +33,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:oneapi}, (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     maxPossibleItems = 16
     Litems = min(M, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
@@ -47,7 +47,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:oneapi}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numItems = 256
     items = min(N, numItems)
     groups = ceil(Int, N / items)
@@ -60,7 +60,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:oneapi}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numItems = 16
     Mitems = min(M, numItems)
     Nitems = min(N, numItems)
@@ -379,8 +379,6 @@ function JACC.shared(x::oneDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-function __init__()
-    const JACC.Array = oneAPI.oneArray{T, N} where {T, N}
-end
+JACC.array_type(::Val{:oneapi}) = oneAPI.oneArray{T, N} where {T, N}
 
 end # module JACCONEAPI

@@ -9,7 +9,7 @@ include("array.jl")
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(::Val{:amdgpu}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -21,7 +21,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 end
 
 function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:amdgpu}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -35,7 +35,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        ::Val{:amdgpu}, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     numThreads = 32
     Lthreads = min(L, numThreads)
@@ -52,7 +52,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:amdgpu}, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -68,7 +68,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::Val{:amdgpu}, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -389,9 +389,6 @@ function JACC.shared(x::ROCDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-
-function __init__()
-    const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
-end
+JACC.array_type(::Val{:amdgpu}) = AMDGPU.ROCArray{T, N} where {T, N}
 
 end # module JACCAMDGPU
