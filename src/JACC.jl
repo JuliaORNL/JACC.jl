@@ -1,4 +1,3 @@
-__precompile__(false)
 module JACC
 
 import Atomix: @atomic
@@ -83,34 +82,13 @@ end
 
 array_type() = array_type(JACCPreferences._backend_dispatchable)
 array_type(::Val{:threads}) = Base.Array{T, N} where {T, N}
-function array_type(::Val{backend}) where backend
-    if backend == :cuda
-        mod = "CUDA"
-    elseif backend == :amdgpu
-        mod = "AMDGPU"
-    elseif backend == :oneapi
-        mod = "oneAPI"
-    else
-        mod = nothing
-    end
-    @error("""
-           Unavailable backend: $backend\n
-           $(mod !== nothing ? "Please do `using $(mod)` before `using JACC`" : "Backend must be one of: \"cuda\", \"amdgpu\", \"oneapi\"")
-           """)
-    throw(UnavailableBackendException())
-end
-struct UnavailableBackendException <: Exception end
 
-function init()
-    # FIXME: This is racey, and depends on the correct extension already being loaded
-    # A better solution may become available if module property access becomes dispatchable
-    try
-        JACC.eval(:(const JACC.Array = $array_type()))
-        return true
-    catch err
-        err isa UnavailableBackendException || rethrow(err)
-        return false
-    end
-end
+struct Array{T, N} end
+(::Type{Array{T, N}})(args...; kwargs...) where {T, N} =
+    array_type(){T, N}(args...; kwargs...)
+(::Type{Array{T}})(args...; kwargs...) where {T} =
+    array_type(){T}(args...; kwargs...)
+(::Type{Array})(args...; kwargs...) =
+    array_type()(args...; kwargs...)
 
 end # module JACC
