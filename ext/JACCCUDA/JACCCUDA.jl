@@ -57,18 +57,21 @@ function JACC.parallel_for(
     CUDA.@sync @cuda threads = (Lthreads, Mthreads, Nthreads) blocks = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_cuda_LMN(f, x...)
 end
 
-function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_reduce(N::Integer, op, f::Function, x...; init)
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
-    ret = CUDA.zeros(Float64, blocks)
-    rret = CUDA.zeros(Float64, 1)
+    ret = fill!(CUDA.CuArray{typeof(init)}(undef, 1), init)
+    rret = CUDA.CuArray([init])
     CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _parallel_reduce_cuda(
-        N, ret, f, x...)
+        N, op, ret, f, x...)
     CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) reduce_kernel_cuda(
-        blocks, ret, rret)
-    return rret
+        blocks, op, ret, rret)
+    return Base.Array(rret)[]
+end
+
+function JACC.parallel_reduce(N::Integer, f::Function, x...)
+    return JACC.parallel_reduce(N, +, f, x...; init = zero(Float64))
 end
 
 function JACC.parallel_reduce(
@@ -113,7 +116,7 @@ function _parallel_for_cuda_LMN(f, x...)
     return nothing
 end
 
-function _parallel_reduce_cuda(N, ret, f, x...)
+function _parallel_reduce_cuda(N, op, ret, f, x...)
     shared_mem = @cuDynamicSharedMem(Float64, 512)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     ti = threadIdx().x
@@ -126,52 +129,52 @@ function _parallel_reduce_cuda(N, ret, f, x...)
     end
     sync_threads()
     if (ti <= 256)
-        shared_mem[ti] += shared_mem[ti + 256]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 256])
     end
     sync_threads()
     if (ti <= 128)
-        shared_mem[ti] += shared_mem[ti + 128]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 128])
     end
     sync_threads()
     if (ti <= 64)
-        shared_mem[ti] += shared_mem[ti + 64]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 64])
     end
     sync_threads()
     if (ti <= 32)
-        shared_mem[ti] += shared_mem[ti + 32]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 32])
     end
     sync_threads()
     if (ti <= 16)
-        shared_mem[ti] += shared_mem[ti + 16]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 16])
     end
     sync_threads()
     if (ti <= 8)
-        shared_mem[ti] += shared_mem[ti + 8]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 8])
     end
     sync_threads()
     if (ti <= 4)
-        shared_mem[ti] += shared_mem[ti + 4]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 4])
     end
     sync_threads()
     if (ti <= 2)
-        shared_mem[ti] += shared_mem[ti + 2]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 2])
     end
     sync_threads()
     if (ti == 1)
-        shared_mem[ti] += shared_mem[ti + 1]
+        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 1])
         ret[blockIdx().x] = shared_mem[ti]
     end
     return nothing
 end
 
-function reduce_kernel_cuda(N, red, ret)
+function reduce_kernel_cuda(N, op, red, ret)
     shared_mem = @cuDynamicSharedMem(Float64, 512)
     i = threadIdx().x
     ii = i
     tmp::Float64 = 0.0
     if N > 512
         while ii <= N
-            tmp += @inbounds red[ii]
+            tmp = op(tmp, @inbounds red[ii])
             ii += 512
         end
     elseif (i <= N)
@@ -180,39 +183,39 @@ function reduce_kernel_cuda(N, red, ret)
     shared_mem[threadIdx().x] = tmp
     sync_threads()
     if (i <= 256)
-        shared_mem[i] += shared_mem[i + 256]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 256])
     end
     sync_threads()
     if (i <= 128)
-        shared_mem[i] += shared_mem[i + 128]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 128])
     end
     sync_threads()
     if (i <= 64)
-        shared_mem[i] += shared_mem[i + 64]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 64])
     end
     sync_threads()
     if (i <= 32)
-        shared_mem[i] += shared_mem[i + 32]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 32])
     end
     sync_threads()
     if (i <= 16)
-        shared_mem[i] += shared_mem[i + 16]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 16])
     end
     sync_threads()
     if (i <= 8)
-        shared_mem[i] += shared_mem[i + 8]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 8])
     end
     sync_threads()
     if (i <= 4)
-        shared_mem[i] += shared_mem[i + 4]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 4])
     end
     sync_threads()
     if (i <= 2)
-        shared_mem[i] += shared_mem[i + 2]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 2])
     end
     sync_threads()
     if (i == 1)
-        shared_mem[i] += shared_mem[i + 1]
+        shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
         ret[1] = shared_mem[1]
     end
     return nothing

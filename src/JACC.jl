@@ -50,16 +50,20 @@ function parallel_for(
     end
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
+function parallel_reduce(N::Integer, op, f::Function, x...; init)
+    ret = init
+    tmp = fill(init, Threads.nthreads())
     @maybe_threaded for i in 1:N
-        tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, x...)
+        tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, x...)) 
     end
     for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
+        ret = op.(ret, tmp[i])
     end
     return ret
+end
+
+function parallel_reduce(N::Integer, f::Function, x...)
+    return parallel_reduce(N, +, f, x...; init = zeros(1))
 end
 
 function parallel_reduce(
