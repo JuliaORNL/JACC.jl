@@ -13,6 +13,9 @@ include("array.jl")
 include("JACCBLAS.jl")
 using .BLAS
 
+include("JACCMULTI.jl")
+using .multi
+
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
