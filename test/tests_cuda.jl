@@ -97,69 +97,77 @@ end
     @test zeros(N)≈Array(x) rtol=1e-5
 end
 
-# @testset "CG" begin
+@testset "CG" begin
 
-# 	function matvecmul(i, a1, a2, a3, x, y, SIZE)
-# 		if i == 1
-# 			y[i] = a2[i] * x[i] + a1[i] * x[i+1]
-# 		elseif i == SIZE
-# 			y[i] = a3[i] * x[i-1] + a2[i] * x[i]
-# 		elseif i > 1 && i < SIZE
-# 			y[i] = a3[i] * x[i-1] + a1[i] * +x[i] + a1[i] * +x[i+1]
-# 		end
-# 	end
+	function matvecmul(i, a1, a2, a3, x, y, SIZE)
+		if i == 1
+			y[i] = a2[i] * x[i] + a1[i] * x[i+1]
+		elseif i == SIZE
+			y[i] = a3[i] * x[i-1] + a2[i] * x[i]
+		elseif i > 1 && i < SIZE
+			y[i] = a3[i] * x[i-1] + a1[i] * +x[i] + a1[i] * +x[i+1]
+		end
+	end
 
-# 	function dot(i, x, y)
-# 		@inbounds return x[i] * y[i]
-# 	end
+	function dot(i, x, y)
+		@inbounds return x[i] * y[i]
+	end
 
-# 	function axpy(i, alpha, x, y)
-# 		@inbounds x[i] += alpha[1, 1] * y[i]
-# 	end
+	function axpy(i, alpha, x, y)
+		@inbounds x[i] += alpha[1, 1] * y[i]
+	end
 
-# 	SIZE = 10
-# 	a0 = JACC.ones(Float64, SIZE)
-# 	a1 = JACC.ones(Float64, SIZE)
-# 	a2 = JACC.ones(Float64, SIZE)
-# 	r = JACC.ones(Float64, SIZE)
-# 	p = JACC.ones(Float64, SIZE)
-# 	s = JACC.zeros(Float64, SIZE)
-# 	x = JACC.zeros(Float64, SIZE)
-# 	r_old = JACC.zeros(Float64, SIZE)
-# 	r_aux = JACC.zeros(Float64, SIZE)
-# 	a1 = a1 * 4
-# 	r = r * 0.5
-# 	p = p * 0.5
-# 	global cond = one(Float64)
+	SIZE = 10
+	a0 = JACC.ones(Float64, SIZE)
+	a1 = JACC.ones(Float64, SIZE)
+	a2 = JACC.ones(Float64, SIZE)
+	r = JACC.ones(Float64, SIZE)
+	p = JACC.ones(Float64, SIZE)
+	s = JACC.zeros(Float64, SIZE)
+	x = JACC.zeros(Float64, SIZE)
+	r_old = JACC.zeros(Float64, SIZE)
+	r_aux = JACC.zeros(Float64, SIZE)
+	a1 = a1 * 4
+	r = r * 0.5
+	p = p * 0.5
+	cond = one(Float64)
 
-# 	while cond[1, 1] >= 1e-14
+	while cond[1, 1] >= 1e-14
 
-# 		r_old = copy(r)
+		r_old = copy(r)
 
-# 		JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
+		JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
 
-# 		alpha0 = JACC.parallel_reduce(SIZE, dot, r, r)
-# 		alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
+		alpha0 = JACC.parallel_reduce(SIZE, dot, r, r)
+		alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
 
-# 		alpha = alpha0 / alpha1
-# 		negative_alpha = alpha * (-1.0)
+		alpha = alpha0 / alpha1
+		negative_alpha = alpha * (-1.0)
 
-# 		JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
-# 		JACC.parallel_for(SIZE, axpy, alpha, x, p)
+		JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
+		JACC.parallel_for(SIZE, axpy, alpha, x, p)
 
-# 		beta0 = JACC.parallel_reduce(SIZE, dot, r, r)
-# 		beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
-# 		beta = beta0 / beta1
+		beta0 = JACC.parallel_reduce(SIZE, dot, r, r)
+		beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
+		beta = beta0 / beta1
 
-# 		r_aux = copy(r)
+		r_aux = copy(r)
 
-# 		JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
-# 		ccond = JACC.parallel_reduce(SIZE, dot, r, r)
-# 		global cond = ccond
-# 		p = copy(r_aux)
-# 	end
-# 	@test cond[1, 1] <= 1e-14
-# end
+		JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
+		ccond = JACC.parallel_reduce(SIZE, dot, r, r)
+		cond = ccond
+		p = copy(r_aux)
+	end
+	@test cond[1, 1] <= 1e-14
+end
+
+@testset "reduce" begin
+    SIZE = 100
+    ah = randn(SIZE)
+    ad = JACC.Array(ah)
+    mxd = JACC.parallel_reduce(SIZE, max, (i,a)->a[i], ad; init = -Inf)
+    @test mxd == maximum(ah)
+end
 
 # @testset "LBM" begin
 
