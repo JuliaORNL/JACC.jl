@@ -502,7 +502,4 @@ function _multi_reduce_kernel_amdgpu_MN((M, N), red, ret)
     return nothing
 end
 
-
-
-
 end # module multi
