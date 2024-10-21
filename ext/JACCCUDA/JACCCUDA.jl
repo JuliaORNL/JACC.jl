@@ -5,7 +5,6 @@ using JACC, CUDA
 # overloaded array functions
 include("array.jl")
 
-
 include("JACCMULTI.jl")
 using .multi
 
