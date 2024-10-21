@@ -4,6 +4,7 @@ authors = ["pedrovalerolara <valerolarap@ornl.gov>", "williamfgc <williamfgc@yah
 version = "0.0.5"
 
 [deps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 
@@ -18,7 +19,7 @@ JACCCUDA = ["CUDA"]
 JACCONEAPI = ["oneAPI"]
 
 [compat]
-AMDGPU = "0.8"
+AMDGPU = "1.0"
 Atomix = "0.1"
 CUDA = "5"
 Preferences = "1.4.0"

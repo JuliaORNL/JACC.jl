@@ -2,6 +2,9 @@ module multi
 
 using JACC
 
+function ndev()
+end
+
 function Array(x::Base.Array{T,N}) where {T,N}
   return x
 end

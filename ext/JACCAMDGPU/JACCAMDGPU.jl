@@ -5,6 +5,9 @@ using JACC, AMDGPU
 # overloaded array functions
 include("array.jl")
 
+include("JACCMULTI.jl")
+using .multi
+
 # overloaded experimental functions
 include("JACCEXPERIMENTAL.jl")
 using .experimental
