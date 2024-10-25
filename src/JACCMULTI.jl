@@ -3,6 +3,9 @@ module multi
 using JACC
 import JACC: ThreadsBackend
 
+function ndev(::ThreadsBackend)
+end
+
 function Array(::ThreadsBackend, x::Base.Array{T,N}) where {T,N}
   return x
 end
@@ -20,6 +23,10 @@ function parallel_reduce(::ThreadsBackend, N::I, f::F, x...) where {I <: Integer
 end
 
 function parallel_reduce(::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+end
+
+function ndev()
+    return ndev(default_backend())
 end
 
 function Array(x::Base.Array{T,N}) where {T,N}

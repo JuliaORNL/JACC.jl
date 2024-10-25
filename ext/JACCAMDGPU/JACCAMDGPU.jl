@@ -2,14 +2,17 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
+const AMDGPUBackend = ROCBackend
+
 # overloaded array functions
 include("array.jl")
+
+include("JACCMULTI.jl")
+using .multi
 
 # overloaded experimental functions
 include("JACCEXPERIMENTAL.jl")
 using .experimental
-
-const AMDGPUBackend = ROCBackend
 
 JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
 
