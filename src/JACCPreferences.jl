@@ -16,5 +16,6 @@ function set_backend(new_backend::String)
 end
 
 const backend = @load_preference("backend", "threads")
+const _backend_dispatchable = Val{Symbol(backend)}()
 
 end # module JACCPreferences

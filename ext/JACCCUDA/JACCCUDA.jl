@@ -12,7 +12,9 @@ using .multi
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+JACC.get_backend(::Val{:cuda}) = CUDABackend()
+
+function JACC.parallel_for(::CUDABackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     #parallel_args = (N, f, x...)
     #parallel_kargs = cudaconvert.(parallel_args)
     #parallel_tt = Tuple{Core.Typeof.(parallel_kargs)...}
@@ -27,7 +29,7 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
 end
 
 function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::CUDABackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
     #numThreads = 32
@@ -41,7 +43,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        ::CUDABackend, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
     # potential benefit from using shared memory.
@@ -57,7 +59,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::CUDABackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -71,7 +73,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::CUDABackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -401,9 +403,6 @@ function JACC.shared(x::CuDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-
-function __init__()
-    const JACC.Array = CUDA.CuArray{T, N} where {T, N}
-end
+JACC.array_type(::CUDABackend) = CUDA.CuArray{T, N} where {T, N}
 
 end # module JACCCUDA

@@ -147,57 +147,57 @@ end
 #    result = Array(jresult)     
 
 #    @test result[1]≈ref_result rtol=1e-8
-    x = ones(1_000)
-    y = ones(1_000)
-    y1 = y*2
-    jx = JACC.ones(1_000)
-    jy = JACC.ones(1_000)
-    jy1 = jy*2
-    alpha = 2.0
-
-   function seq_axpy(N, alpha, x, y)
-       for i in 1:N
-           @inbounds x[i] += alpha * y[i]
-       end
-   end
-    
-   function seq_dot(N, x, y)
-       r = 0.0
-       for i in 1:N
-           @inbounds r += x[i] * y[i]
-       end
-       return r
-   end
-   function seq_scal(N, alpha, x)
-        for i in 1:N
-            @inbounds x[i] = alpha * x[i]
-        end
-    end
-
-    function seq_asum(N, x)
-        r = 0.0
-        for i in 1:N
-            @inbounds r += abs(x[i])
-        end
-        return r
-    end
-
-    function seq_nrm2(N, x)
-        sum_sq = 0.0
-        for i in 1:N
-            @inbounds sum_sq += x[i]*x[i]
-        end
-        r = sqrt(sum_sq)
-        return r
-    end
-
-    function seq_swap(N, x, y1)
-        for i in 1:N
-            @inbounds t = x[i]
-            @inbounds x[i] = y1[i]
-            @inbounds y1[i] = t
-        end       
-    end
+#    x = ones(1_000)
+#    y = ones(1_000)
+#    y1 = y*2
+#    jx = JACC.ones(1_000)
+#    jy = JACC.ones(1_000)
+#    jy1 = jy*2
+#    alpha = 2.0
+# 
+#   function seq_axpy(N, alpha, x, y)
+#       for i in 1:N
+#           @inbounds x[i] += alpha * y[i]
+#       end
+#   end
+#    
+#   function seq_dot(N, x, y)
+#       r = 0.0
+#       for i in 1:N
+#           @inbounds r += x[i] * y[i]
+#       end
+#       return r
+#   end
+#   function seq_scal(N, alpha, x)
+#        for i in 1:N
+#            @inbounds x[i] = alpha * x[i]
+#        end
+#    end
+# 
+#    function seq_asum(N, x)
+#        r = 0.0
+#        for i in 1:N
+#            @inbounds r += abs(x[i])
+#        end
+#        return r
+#    end
+# 
+#    function seq_nrm2(N, x)
+#        sum_sq = 0.0
+#        for i in 1:N
+#            @inbounds sum_sq += x[i]*x[i]
+#        end
+#        r = sqrt(sum_sq)
+#        return r
+#    end
+# 
+#    function seq_swap(N, x, y1)
+#        for i in 1:N
+#            @inbounds t = x[i]
+#            @inbounds x[i] = y1[i]
+#            @inbounds y1[i] = t
+#        end       
+#    end
   
     # ref_result = seq_axpy(1_000, alpha, x, y)
     # ref_result = seq_dot(1_000, x, y)   
@@ -229,7 +229,7 @@ end
     # @test x == Array(jx)
     # @test y1 == Array(jy1)
 
-end
+# end
 
 @testset "Add-2D" begin
     function add!(i, j, A, B, C)

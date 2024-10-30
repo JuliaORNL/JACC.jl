@@ -2,11 +2,11 @@ module multi
 
 using JACC, CUDA
 
-function JACC.multi.ndev()
+function JACC.multi.ndev(::CUDABackend)
   return length(devices())
 end
 
-function JACC.multi.Array(x::Base.Array{T,N}) where {T,N}
+function JACC.multi.Array(::CUDABackend, x::Base.Array{T,N}) where {T,N}
 
   ndev = length(devices())
   ret = Vector{Any}(undef, 2)  
@@ -56,7 +56,7 @@ function JACC.multi.Array(x::Base.Array{T,N}) where {T,N}
 
 end
 
-function JACC.multi.gArray(x::Base.Array{T,N}) where {T,N}
+function JACC.multi.gArray(::CUDABackend, x::Base.Array{T,N}) where {T,N}
 
   ndev = length(devices())
   ret = Vector{Any}(undef, 2)  
@@ -112,7 +112,7 @@ function JACC.multi.gArray(x::Base.Array{T,N}) where {T,N}
 
 end
 
-function JACC.multi.copy(x::Vector{Any}, y::Vector{Any})
+function JACC.multi.copy(::CUDABackend, x::Vector{Any}, y::Vector{Any})
    
   device!(0) 
   ndev = length(devices())
@@ -157,7 +157,7 @@ function JACC.multi.copy(x::Vector{Any}, y::Vector{Any})
   
 end
 
-function JACC.multi.gid(dev_id::I, i::I, ndev::I) where{I <: Integer}
+function JACC.multi.gid(::CUDABackend, dev_id::I, i::I, ndev::I) where{I <: Integer}
     ind = 0
     if dev_id == 1
         ind = i
@@ -170,7 +170,7 @@ function JACC.multi.gid(dev_id::I, i::I, ndev::I) where{I <: Integer}
 end
 
 
-function JACC.multi.gswap(x::Vector{Any})
+function JACC.multi.gswap(::CUDABackend, x::Vector{Any})
    
    device!(0) 
    ndev = length(devices())
@@ -241,7 +241,7 @@ function JACC.multi.gswap(x::Vector{Any})
 
 end
 
-function JACC.multi.gcopytoarray(x::Vector{Any}, y::Vector{Any})
+function JACC.multi.gcopytoarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
    #x is the array and y is the ghost array
    device!(0) 
    ndev = length(devices())
@@ -265,7 +265,7 @@ function JACC.multi.gcopytoarray(x::Vector{Any}, y::Vector{Any})
   
 end
 
-function JACC.multi.copytogarray(x::Vector{Any}, y::Vector{Any})
+function JACC.multi.copytogarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
    #x is the ghost array and y is the array
    device!(0) 
    ndev = length(devices())
@@ -289,7 +289,7 @@ function JACC.multi.copytogarray(x::Vector{Any}, y::Vector{Any})
   
 end
 
-function JACC.multi.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.multi.parallel_for(::CUDABackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
 
   device!(0)
   ndev = length(devices())
@@ -313,7 +313,7 @@ function JACC.multi.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Fun
 
 end
 
-function JACC.multi.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.multi.parallel_reduce(::CUDABackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     
     device!(0)
     ndev = length(devices())
@@ -354,7 +354,7 @@ function JACC.multi.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: 
     return final_rret
 end
 
-function JACC.multi.parallel_for(
+function JACC.multi.parallel_for(::CUDABackend, 
          (M, N)::Tuple{I,I}, f::F, x...) where {I <: Integer, F <: Function}
 
   ndev = length(devices())
@@ -380,7 +380,7 @@ function JACC.multi.parallel_for(
 
 end
 
-function JACC.multi.parallel_reduce(
+function JACC.multi.parallel_reduce(::CUDABackend, 
         (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 
   ndev = length(devices())

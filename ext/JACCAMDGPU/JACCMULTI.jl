@@ -1,8 +1,9 @@
 module multi
 
 using JACC, AMDGPU
+using JACCAMDGPU: AMDGPUBackend
 
-function JACC.multi.ndev()
+function JACC.multi.ndev(::AMDGPUBackend)
   return length(AMDGPU.devices())
 end
 
@@ -13,7 +14,7 @@ function get_portable_rocarray(x::Base.Array{T, N}) where {T, N}
     ROCArray{T, N}(AMDGPU.GPUArrays.DataRef(AMDGPU.pool_free, AMDGPU.Managed(buf)), dims)
 end
 
-function JACC.multi.Array(x::Base.Array{T,N}) where {T,N}
+function JACC.multi.Array(::AMDGPUBackend, x::Base.Array{T,N}) where {T,N}
 
   ret = Vector{Any}(undef, 2)  
   ndev = length(AMDGPU.devices())
@@ -68,7 +69,7 @@ function JACC.multi.Array(x::Base.Array{T,N}) where {T,N}
 
 end
 
-function JACC.multi.copy(x::Vector{Any}, y::Vector{Any})
+function JACC.multi.copy(::AMDGPUBackend, x::Vector{Any}, y::Vector{Any})
    
    AMDGPU.device!(AMDGPU.device(1))
    ndev = length(AMDGPU.devices())
@@ -92,7 +93,7 @@ function JACC.multi.copy(x::Vector{Any}, y::Vector{Any})
 
 end
 
-function JACC.multi.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.multi.parallel_for(::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
 
   ndev = length(AMDGPU.devices())
   N_multi = ceil(Int, N/ndev)
@@ -115,7 +116,7 @@ function JACC.multi.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Fun
 
 end
 
-function JACC.multi.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.multi.parallel_for(::AMDGPUBackend, (M, N)::Tuple{I,I}, f::F, x...) where {I <: Integer, F <: Function}
 
   ndev = length(AMDGPU.devices())
   N_multi = ceil(Int, N/ndev)
@@ -140,7 +141,7 @@ function JACC.multi.parallel_for((M, N)::Tuple{I,I}, f::F, x...) where {I <: Int
 
 end
 
-function JACC.multi.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.multi.parallel_reduce(::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
 
     AMDGPU.device!(AMDGPU.device(1))
     ndev = length(AMDGPU.devices())
@@ -195,7 +196,7 @@ function JACC.multi.parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: 
     return final_rret
 end
 
-function JACC.multi.parallel_reduce(
+function JACC.multi.parallel_reduce(::AMDGPUBackend, 
         (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
 
   ndev = length(devices())
