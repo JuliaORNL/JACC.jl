@@ -56,24 +56,235 @@ function JACC.multi.Array(::CUDABackend, x::Base.Array{T,N}) where {T,N}
 
 end
 
+function JACC.multi.gArray(::CUDABackend, x::Base.Array{T,N}) where {T,N}
+
+  ndev = length(devices())
+  ret = Vector{Any}(undef, 2)  
+
+  if ndims(x) == 1
+
+    device!(0)
+    s_array = length(x)
+    s_arrays = ceil(Int, s_array/ndev)
+    array_ret = Vector{Any}(undef, ndev)  
+    pointer_ret = Vector{CuDeviceVector{T,CUDA.AS.Global}}(undef, ndev)  
+
+    for i in 1:ndev
+      device!(i-1)
+      if i == 1
+          array_ret[i] = CuArray(x[((i-1)*s_arrays)+1:(i*s_arrays)+1])
+      elseif i == ndev
+          array_ret[i] = CuArray(x[(((i-1)*s_arrays)+1)-1:i*s_arrays])
+      else
+          array_ret[i] = CuArray(x[(((i-1)*s_arrays)+1)-1:(i*s_arrays)+1])
+      end
+      pointer_ret[i] = cudaconvert(array_ret[i])
+    end
+  
+    device!(0)
+    cuda_pointer_ret = CuArray(pointer_ret)
+    ret[1] = cuda_pointer_ret
+    ret[2] = array_ret
+
+  elseif ndims(x) == 2
+
+    device!(0)
+    s_col_array = size(x,2)
+    s_col_arrays = ceil(Int, s_col_array/ndev)
+    array_ret = Vector{Any}(undef, ndev)  
+    pointer_ret = Vector{CuDeviceMatrix{T,CUDA.AS.Global}}(undef, ndev)  
+
+    for i in 1:ndev
+      device!(i-1)
+      array_ret[i] = CuArray(x[:,((i-1)*s_col_arrays)+1:i*s_col_arrays])
+      pointer_ret[i] = cudaconvert(array_ret[i])
+    end
+  
+    device!(0)
+  
+    cuda_pointer_ret = CuArray(pointer_ret)
+    ret[1] = cuda_pointer_ret
+    ret[2] = array_ret
+
+  end
+
+  return ret
+
+end
+
 function JACC.multi.copy(::CUDABackend, x::Vector{Any}, y::Vector{Any})
+   
+  device!(0) 
+  ndev = length(devices())
+   
+  if ndims(x[2][1]) == 1
+  
+    for i in 1:ndev
+      device!(i-1)
+      size = length(x[2][i])
+      numThreads = 512
+      threads = min(size, numThreads)
+      blocks = ceil(Int, size / threads)
+      @cuda threads=threads blocks=blocks _multi_copy(i, x[1], y[1])
+    end
+    
+    for i in 1:ndev
+      device!(i-1)
+      synchronize()
+    end 
+
+  elseif ndims(x[2][1]) == 2
+
+    for i in 1:ndev
+      device!(i-1)
+      ssize = size(x[2][i])
+      numThreads = 16
+      Mthreads = min(ssize[1], numThreads)
+      Mblocks = ceil(Int, ssize[1] / Mthreads)
+      Nthreads = min(ssize[2], numThreads)
+      Nblocks = ceil(Int, ssize[2] / Nthreads)
+      @cuda threads=(Mthreads,Nthreads) blocks=(Mblocks,Nblocks) _multi_copy_2d(i, x[1], y[1])
+    end
+     
+    for i in 1:ndev
+      device!(i-1)
+      synchronize()
+    end
+   
+   end
+
+   device!(0) 
+  
+end
+
+function JACC.multi.gid(::CUDABackend, dev_id::I, i::I, ndev::I) where{I <: Integer}
+    ind = 0
+    if dev_id == 1
+        ind = i
+    elseif dev_id == ndev
+        ind = i + 1
+    else
+        ind = i + 1
+    end    
+    return ind
+end
+
+
+function JACC.multi.gswap(::CUDABackend, x::Vector{Any})
+   
    device!(0) 
    ndev = length(devices())
+   
+   if ndims(x[2][1]) == 1
+   
+     #Left to right swapping
+     for i in 1:ndev-1
+       device!(i-1)
+       tmp = Base.Array(x[2][i])
+       size = length(tmp)
+       ghost_lr = tmp[size-1]
+       device!(i)
+       @cuda threads=32 blocks=1 _multi_swap_ghost_lr(i+1, x[1], ndev, size, ghost_lr)
+     end
+   
+     #Right to left swapping
+     for i in 2:ndev
+       device!(i-1)
+       tmp = Base.Array(x[2][i])
+       size = length(tmp)
+       ghost_rl = tmp[2]
+       device!(i-2)
+       @cuda threads=32 blocks=1 _multi_swap_ghost_rl(i-1, x[1], ndev, size, ghost_rl)
+     end
+   
+     for i in 1:ndev
+       device!(i-1)
+       synchronize()
+     end 
+
+   elseif ndims(x[2][1]) == 2
   
+     #Left to right swapping
+     for i in 1:ndev-1
+       device!(i-1)
+       dim = size(x[2][i])
+       tmp = Base.Array(x[2][i][:,dim[2]-1])
+       device!(i)
+       ghost_lr = CuArray(tmp)
+       numThreads = 512
+       threads = min(dim[1], numThreads)
+       blocks = ceil(Int, dim[1] / threads)
+       @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_lr(i+1, x[1], ndev, dim[1], ghost_lr)
+     end
+
+     #Right to left swapping
+     for i in 2:ndev
+       device!(i-1)
+       tmp = Base.Array(x[2][i][:,2])
+       device!(i-2)
+       dim = size(x[2][i-1])
+       ghost_rl = CuArray(tmp)
+       numThreads = 512
+       threads = min(dim[1], numThreads)
+       blocks = ceil(Int, dim[1] / threads)
+       @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_rl(i-1, x[1], ndev, dim[1], dim[2], ghost_rl)
+     end
+
+     for i in 1:ndev
+        device!(i-1)
+        synchronize()
+     end
+
+   end 
+     
+   device!(0)
+
+end
+
+function JACC.multi.gcopytoarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
+   #x is the array and y is the ghost array
+   device!(0) 
+   ndev = length(devices())
+   
+   for i in 1:ndev
+       device!(i-1)
+       size = length(y[2][i])
+       numThreads = 512
+       threads = min(size, numThreads)
+       blocks = ceil(Int, size / threads)
+       @cuda threads=threads blocks=blocks _multi_copy_ghosttoarray(i, x[1], y[1], size, ndev)
+       #synchronize() 
+   end
+   
+   for i in 1:ndev
+      device!(i-1)
+      synchronize()
+   end 
+   
+   device!(0) 
+  
+end
+
+function JACC.multi.copytogarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
+   #x is the ghost array and y is the array
+   device!(0) 
+   ndev = length(devices())
+   
    for i in 1:ndev
        device!(i-1)
        size = length(x[2][i])
        numThreads = 512
        threads = min(size, numThreads)
        blocks = ceil(Int, size / threads)
-       @cuda threads=threads blocks=blocks _multi_copy(i, x[1], y[1])
+       @cuda threads=threads blocks=blocks _multi_copy_arraytoghost(i, x[1], y[1], size, ndev)
+       #synchronize() 
    end
-    
+   
    for i in 1:ndev
       device!(i-1)
       synchronize()
    end 
-
+   
    device!(0) 
   
 end
@@ -213,6 +424,77 @@ function JACC.multi.parallel_reduce(::CUDABackend,
     
   return final_rret
 
+end
+
+function _multi_copy(dev_id, x, y)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    @inbounds x[dev_id][i] = y[dev_id][i]
+    return nothing
+end
+
+function _multi_copy_2d(dev_id, x, y)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    @inbounds x[dev_id][i,j] = y[dev_id][i,j]
+    return nothing
+end
+
+function _multi_copy_ghosttoarray(dev_id, x, y, size, ndev)
+    #x is the array and y is the ghost array
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if dev_id == 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    elseif dev_id == ndev && i > 1
+        @inbounds x[dev_id][i-1] = y[dev_id][i]
+    elseif i > 1 && i < size
+        @inbounds x[dev_id][i-1] = y[dev_id][i]
+    end
+    return nothing
+end
+
+function _multi_copy_arraytoghost(dev_id, x, y, size, ndev)
+    #x is the ghost array and y is the array
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if dev_id == 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    elseif dev_id == ndev && i < size
+        @inbounds x[dev_id][i+1] = y[dev_id][i]
+    elseif i > 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    end
+    return nothing
+end
+
+function _multi_swap_ghost_lr(dev_id, x, ndev, size, ghost)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i == 1
+        x[dev_id][i] = ghost
+    end
+    return nothing
+end
+
+function _multi_swap_2d_ghost_lr(dev_id, x, ndev, size, ghost)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i < size + 1
+      x[dev_id][i, 1] = ghost[i]
+    end
+    return nothing
+end
+
+function _multi_swap_ghost_rl(dev_id, x, ndev, size, ghost)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i == 1
+        x[dev_id][size] = ghost
+    end
+    return nothing
+end
+
+function _multi_swap_2d_ghost_rl(dev_id, x, ndev, size, col, ghost)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i < size + 1
+      x[dev_id][i, col] = ghost[i]
+    end
+    return nothing
 end
 
 function _multi_parallel_for_cuda(N, dev_id, f, x...)
