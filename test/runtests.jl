@@ -11,8 +11,8 @@ const backend = JACC.JACCPreferences.backend
     include("tests_cuda.jl")
 
 elseif backend == "amdgpu"
-    # Pkg.add(; name = "AMDGPU", version = "v0.8.6")
-    Pkg.add("AMDGPU")
+    Pkg.add(; name = "AMDGPU", version = "v0.8.6")
+    # Pkg.add("AMDGPU")
     println("AMDGPU backend loaded")
     include("tests_amdgpu.jl")
 

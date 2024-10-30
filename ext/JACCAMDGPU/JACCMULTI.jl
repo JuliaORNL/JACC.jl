@@ -1,6 +1,7 @@
 module multi
 
 using JACC, AMDGPU
+using JACCAMDGPU: AMDGPUBackend
 
 function JACC.multi.ndev(::AMDGPUBackend)
   return length(AMDGPU.devices())
