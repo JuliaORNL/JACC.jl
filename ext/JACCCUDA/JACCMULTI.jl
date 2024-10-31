@@ -169,6 +169,21 @@ function JACC.multi.gid(::CUDABackend, dev_id::I, i::I, ndev::I) where{I <: Inte
     return ind
 end
 
+function JACC.multi.gid(::CUDABackend, dev_id::I, (i,j)::Tuple{I,I}, ndev::I) where{I <: Integer}
+    
+    ind = (0, 0)
+    
+    if dev_id == 1
+      ind = (i, j)
+    elseif dev_id == ndev
+      ind = (i, j+1)
+    else
+      ind = (i, j+1)
+    end
+    
+    return ind
+
+end
 
 function JACC.multi.gswap(::CUDABackend, x::Vector{Any})
    
