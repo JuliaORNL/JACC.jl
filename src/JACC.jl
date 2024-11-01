@@ -5,6 +5,8 @@ import Atomix: @atomic
 # module to set backend preferences 
 include("JACCPreferences.jl")
 
+default_backend() = get_backend(JACCPreferences._backend_dispatchable)
+
 struct ThreadsBackend end
 
 include("helper.jl")
@@ -96,8 +98,6 @@ struct Array{T, N} end
     array_type(){T}(args...; kwargs...)
 (::Type{Array})(args...; kwargs...) =
     array_type()(args...; kwargs...)
-
-default_backend() = get_backend(JACCPreferences._backend_dispatchable)
 
 array_type() = array_type(default_backend())
 
