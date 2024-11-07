@@ -25,3 +25,5 @@ elseif backend == "threads"
     println("Threads backend loaded")
     include("tests_threads.jl")
 end
+
+include("unittests.jl")
