@@ -41,51 +41,51 @@ function parallel_reduce(::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) wher
 end
 
 function ndev()
-    return ndev(default_backend())
+    return ndev(JACC.default_backend())
 end
 
 function Array(x::Base.Array{T,N}) where {T,N}
-    return Array(default_backend(), x)
+    return Array(JACC.default_backend(), x)
 end
 
 function gArray(x::Base.Array{T,N}) where {T,N}
-    return gArray(default_backend(), x)
+    return gArray(JACC.default_backend(), x)
 end
 
 function gid(dev_id::I, i::I, ndev::I) where{I <: Integer}
-    return gid(default_backend(), dev_id, i, ndev)
+    return gid(JACC.default_backend(), dev_id, i, ndev)
 end
 
 function gswap(x::Vector{Any})
-    return gswap(default_backend(), x)
+    return gswap(JACC.default_backend(), x)
 end
 
 function gcopytoarray(x::Vector{Any}, y::Vector{Any})
-    return gcopytoarray(default_backend(), x, y)
+    return gcopytoarray(JACC.default_backend(), x, y)
 end
 
 function copytogarray(x::Vector{Any}, y::Vector{Any})
-    return copytogarray(default_backend(), x, y)
+    return copytogarray(JACC.default_backend(), x, y)
 end
 
 function copy(x::Vector{Any}, y::Vector{Any})
-    return copy(default_backend(), x, y)
+    return copy(JACC.default_backend(), x, y)
 end
 
 function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_for(default_backend(), N, f, x...)
+    return parallel_for(JACC.default_backend(), N, f, x...)
 end
 
 function parallel_for((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_for(default_backend(), (M, N), f, x...)
+    return parallel_for(JACC.default_backend(), (M, N), f, x...)
 end
 
 function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_reduce(default_backend(), N, f, x...)
+    return parallel_reduce(JACC.default_backend(), N, f, x...)
 end
 
 function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_reduce(default_backend(), (M, N), f, x...)
+    return parallel_reduce(JACC.default_backend(), (M, N), f, x...)
 end
 
 end # module multi

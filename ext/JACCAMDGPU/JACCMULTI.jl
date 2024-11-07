@@ -69,8 +69,255 @@ function JACC.multi.Array(::AMDGPUBackend, x::Base.Array{T,N}) where {T,N}
 
 end
 
+function JACC.multi.gArray(::AMDGPUBackend, x::Base.Array{T,N}) where {T,N}
+
+  ndev = length(AMDGPU.devices())
+  ret = Vector{Any}(undef, 2)
+
+  if ndims(x) == 1
+
+    AMDGPU.device!(AMDGPU.device(1))
+    s_array = length(x)
+    s_arrays = ceil(Int, s_array/ndev)
+    array_ret = Vector{Any}(undef, ndev)
+    pointer_ret = Vector{AMDGPU.Device.ROCDeviceVector{T,AMDGPU.AS.Global}}(undef, ndev)
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      if i == 1
+          array_ret[i] = ROCArray(x[((i-1)*s_arrays)+1:(i*s_arrays)+1])
+      elseif i == ndev
+          array_ret[i] = ROCArray(x[(((i-1)*s_arrays)+1)-1:i*s_arrays])
+      else
+          array_ret[i] = ROCArray(x[(((i-1)*s_arrays)+1)-1:(i*s_arrays)+1])
+      end
+      pointer_ret[i] = AMDGPU.rocconvert(array_ret[i])
+    end
+
+    AMDGPU.device!(AMDGPU.device(1))
+    #amdgpu_pointer_ret = ROCArray(pointer_ret)
+    amdgpu_pointer_ret = get_portable_rocarray(pointer_ret)
+    copyto!(amdgpu_pointer_ret, pointer_ret)
+    ret[1] = amdgpu_pointer_ret
+    ret[2] = array_ret
+
+  elseif ndims(x) == 2
+
+    AMDGPU.device!(AMDGPU.device(1))
+    #s_row_array = size(x,1)
+    s_col_array = size(x,2)
+    s_col_arrays = ceil(Int, s_col_array/ndev)
+    #println(s_col_arrays)
+    array_ret = Vector{Any}(undef, ndev)
+    pointer_ret = Vector{AMDGPU.Device.ROCDeviceMatrix{T,1}}(undef, ndev)  
+
+    i_col_arrays = floor(Int, s_col_array/ndev)
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      if i == 1
+        array_ret[i] = ROCArray(x[:,((i-1)*s_col_arrays)+1:i*s_col_arrays+1])
+      elseif i == ndev
+        array_ret[i] = ROCArray(x[:,(((i-1)*s_col_arrays)+1)-1:i*s_col_arrays])
+      else
+        array_ret[i] = ROCArray(x[:,(((i-1)*s_col_arrays)+1)-1:i*s_col_arrays+1])
+      end
+      pointer_ret[i] = AMDGPU.rocconvert(array_ret[i])
+    end
+
+    AMDGPU.device!(AMDGPU.device(1))
+    #amdgpu_pointer_ret = ROCArray(pointer_ret)
+    amdgpu_pointer_ret = get_portable_rocarray(pointer_ret)
+    copyto!(amdgpu_pointer_ret, pointer_ret)
+    ret[1] = amdgpu_pointer_ret
+    ret[2] = array_ret
+
+  end
+
+  return ret
+
+end
+
 function JACC.multi.copy(::AMDGPUBackend, x::Vector{Any}, y::Vector{Any})
    
+  AMDGPU.device!(AMDGPU.device(1))
+  ndev = length(AMDGPU.devices())
+  
+  if ndims(x[2][1]) == 1
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      size = length(x[2][i])
+      numThreads = 512
+      threads = min(size, numThreads)
+      blocks = ceil(Int, size / threads)
+      @roc groupsize=threads gridsize=blocks _multi_copy(i, x[1], y[1])
+    end
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      AMDGPU.synchronize()
+    end
+  
+  elseif ndims(x[2][1]) == 2
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      ssize = size(x[2][i])
+      numThreads = 16
+      Mthreads = min(ssize[1], numThreads)
+      Mblocks = ceil(Int, ssize[1] / Mthreads)
+      Nthreads = min(ssize[2], numThreads)
+      Nblocks = ceil(Int, ssize[2] / Nthreads)
+      @roc groupsize=(Mthreads,Nthreads) gridsize=(Mblocks,Nblocks) _multi_copy_2d(i, x[1], y[1])
+    end
+     
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      AMDGPU.synchronize()
+    end
+
+  end
+ 
+  AMDGPU.device!(AMDGPU.device(1))
+
+end
+
+function JACC.multi.gid(::AMDGPUBackend, dev_id::I, i::I, ndev::I) where{I <: Integer}
+
+    ind = 0
+    
+    if dev_id == 1
+        ind = i
+    elseif dev_id == ndev
+        ind = i + 1
+    else
+        ind = i + 1
+    end
+
+    return ind
+end
+
+function JACC.multi.gid(::AMDGPUBackend, dev_id::I, (i,j)::Tuple{I,I}, ndev::I) where{I <: Integer}
+    
+    ind = (0, 0)
+    
+    if dev_id == 1
+      ind = (i, j)
+    elseif dev_id == ndev
+      ind = (i, j+1)
+    else
+      ind = (i, j+1)
+    end
+    
+    return ind
+
+end
+
+function JACC.multi.gswap(::AMDGPUBackend, x::Vector{Any})
+
+  AMDGPU.device!(AMDGPU.device(1))
+  ndev = length(AMDGPU.devices())
+
+  if ndims(x[2][1]) == 1
+
+    #Left to right swapping
+    for i in 1:ndev-1
+      AMDGPU.device!(AMDGPU.device(i))
+      tmp = Base.Array(x[2][i])
+      size = length(tmp)
+      ghost_lr = tmp[size-1]
+      AMDGPU.device!(AMDGPU.device(i+1))
+      @roc groupsize=32 gridsize=1 _multi_swap_ghost_lr(i+1, x[1], ndev, size, ghost_lr)
+    end
+
+    #Right to left swapping
+    for i in 2:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      tmp = Base.Array(x[2][i])
+      if (i - 1) == 1
+        size = length(tmp) - 1
+      else 
+        size = length(tmp)
+      end
+      ghost_rl = tmp[2]
+      AMDGPU.device!(AMDGPU.device(i-1))
+      @roc groupsize=32 gridsize=1 _multi_swap_ghost_rl(i-1, x[1], ndev, size, ghost_rl)
+    end
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      AMDGPU.synchronize()
+    end
+  
+  elseif ndims(x[2][1]) == 2
+
+    #Left to right swapping
+    for i in 1:ndev-1
+      AMDGPU.device!(AMDGPU.device(i))
+      dim = size(x[2][i])
+      tmp = Base.Array(x[2][i][:,dim[2]-1])
+      AMDGPU.device!(AMDGPU.device(i+1))
+      ghost_lr = ROCArray(tmp)
+      numThreads = 512
+      threads = min(dim[1], numThreads)
+      blocks = ceil(Int, dim[1] / threads)
+      #x[2][i+1][:,1] = ghost_lr
+      @roc groupsize=threads gridsize=blocks _multi_swap_2d_ghost_lr(i+1, x[1], ndev, dim[1], ghost_lr)
+      #AMDGPU.synchronize()
+    end
+
+    #Right to left swapping
+    for i in 2:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      tmp = Base.Array(x[2][i][:,2])
+      AMDGPU.device!(AMDGPU.device(i-1))
+      dim = size(x[2][i-1])
+      ghost_rl = ROCArray(tmp)
+      numThreads = 512
+      threads = min(dim[1], numThreads)
+      blocks = ceil(Int, dim[1] / threads)
+      @roc groupsize=threads gridsize=blocks _multi_swap_2d_ghost_rl(i-1, x[1], ndev, dim[1], dim[2], ghost_rl)
+      #AMDGPU.synchronize()
+    end
+
+    for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      AMDGPU.synchronize()
+    end
+  
+  end
+
+  AMDGPU.device!(AMDGPU.device(1))
+
+end
+
+function JACC.multi.gcopytoarray(::AMDGPUBackend, x::Vector{Any}, y::Vector{Any})
+   
+   #x is the array and y is the ghost array
+   AMDGPU.device!(AMDGPU.device(1))
+   ndev = length(AMDGPU.devices())
+
+   for i in 1:ndev
+       AMDGPU.device!(AMDGPU.device(i))
+       size = length(y[2][i])
+       numThreads = 512
+       threads = min(size, numThreads)
+       blocks = ceil(Int, size / threads)
+       @roc groupsize=threads gridsize=blocks _multi_copy_ghosttoarray(i, x[1], y[1], size, ndev)
+   end
+
+   for i in 1:ndev
+      AMDGPU.device!(AMDGPU.device(i))
+      AMDGPU.synchronize()
+   end
+
+   AMDGPU.device!(AMDGPU.device(1))
+
+end
+
+function JACC.multi.copytogarray(::AMDGPUBackend, x::Vector{Any}, y::Vector{Any})
+
+   #x is the ghost array and y is the array
    AMDGPU.device!(AMDGPU.device(1))
    ndev = length(AMDGPU.devices())
 
@@ -80,8 +327,7 @@ function JACC.multi.copy(::AMDGPUBackend, x::Vector{Any}, y::Vector{Any})
        numThreads = 512
        threads = min(size, numThreads)
        blocks = ceil(Int, size / threads)
-       @roc groupsize=threads gridsize=blocks _multi_copy(i, x[1], y[1])
-       #AMDGPU.synchronize()
+       @roc groupsize=threads gridsize=blocks _multi_copy_arraytoghost(i, x[1], y[1], size, ndev)
    end
 
    for i in 1:ndev
@@ -246,6 +492,78 @@ function JACC.multi.parallel_reduce(::AMDGPUBackend,
 
   return final_rret
 
+end
+
+function _multi_copy(dev_id, x, y)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    @inbounds x[dev_id][i] = y[dev_id][i]
+    return nothing
+end
+
+function _multi_copy_2d(dev_id, x, y)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    @inbounds x[dev_id][i,j] = y[dev_id][i,j]
+    return nothing
+end
+
+function _multi_copy_ghosttoarray(dev_id, x, y, size, ndev)
+    #x is the array and y is the ghost array
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if dev_id == 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    elseif dev_id == ndev && i > 1
+        @inbounds x[dev_id][i-1] = y[dev_id][i]
+    elseif i > 1 && i < size
+        @inbounds x[dev_id][i-1] = y[dev_id][i]
+    end
+    return nothing
+end
+
+function _multi_copy_arraytoghost(dev_id, x, y, size, ndev)
+    #x is the ghost array and y is the array
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if dev_id == 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    elseif dev_id == ndev && i < size
+        @inbounds x[dev_id][i+1] = y[dev_id][i]
+    elseif i > 1 && i < size
+        @inbounds x[dev_id][i] = y[dev_id][i]
+    end
+    return nothing
+end
+
+function _multi_swap_ghost_lr(dev_id, x, ndev, size, ghost)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if i == 1
+        x[dev_id][i] = ghost
+    end
+    return nothing
+end
+
+function _multi_swap_2d_ghost_lr(dev_id, x, ndev, size, ghost)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if i < size + 1
+      x[dev_id][i, 1] = ghost[i]
+    end
+    return nothing
+end
+
+function _multi_swap_ghost_rl(dev_id, x, ndev, size, ghost)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if i == 1
+        #x[dev_id][120] = ghost
+        x[dev_id][size] = ghost
+    end
+    return nothing
+end
+
+function _multi_swap_2d_ghost_rl(dev_id, x, ndev, size, col, ghost)
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    if i < size + 1
+      x[dev_id][i, col] = ghost[i]
+    end
+    return nothing
 end
 
 function _multi_parallel_for_amdgpu(N, dev_id, f, x...)
