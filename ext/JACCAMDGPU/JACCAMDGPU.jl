@@ -23,7 +23,7 @@ function JACC.parallel_for(::AMDGPUBackend, N::I, f::F, x...) where {I <: Intege
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * threads * sizeof(Float64)
-    @roc groupsize = threads gridsize = blocks shmem = shmem_size _parallel_for_amdgpu(f, x...)
+    @roc groupsize = threads gridsize = blocks shmem = shmem_size _parallel_for_amdgpu(N, f, x...)
     AMDGPU.synchronize()
 end
 
@@ -37,7 +37,7 @@ function JACC.parallel_for(
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * Mthreads * Nthreads * sizeof(Float64)
-    @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_MN(f, x...)
+    @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_MN((M,N), f, x...)
     AMDGPU.synchronize()
 end
 
@@ -54,7 +54,7 @@ function JACC.parallel_for(
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
-    @roc groupsize = (Lthreads, Mthreads, Nthreads) gridsize = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_LMN(f, x...)
+    @roc groupsize = (Lthreads, Mthreads, Nthreads) gridsize = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_LMN((L,M,N), f, x...)
     AMDGPU.synchronize()
 end
 
@@ -92,23 +92,29 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function _parallel_for_amdgpu(f, x...)
+function _parallel_for_amdgpu(N, f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    i > N && return nothing
     f(i, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_MN(f, x...)
+function _parallel_for_amdgpu_MN((M,N), f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    i > M && return nothing
+    j > N && return nothing
     f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_LMN(f, x...)
+function _parallel_for_amdgpu_LMN((L,M,N), f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     k = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
+    i > L && return nothing
+    j > M && return nothing
+    k > N && return nothing
     f(i, j, k, x...)
     return nothing
 end
