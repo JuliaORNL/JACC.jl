@@ -123,8 +123,12 @@ function parallel_reduce(N::Integer, f::Function, x...)
     return parallel_reduce(N, +, f, x...; init = zero(Float64))
 end
 
-function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_reduce(default_backend(), (M, N), f, x...)
+function parallel_reduce((M, N)::Tuple{I, I}, op, f::F, x...; init) where {I <: Integer, F <: Function}
+    return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
+end
+
+function parallel_reduce((M, N)::Tuple{Integer, Integer}, f::Function, x...)
+    return parallel_reduce((M,N), +, f, x...; init = zero(Float64))
 end
 
 end # module JACC

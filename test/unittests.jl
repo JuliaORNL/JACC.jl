@@ -96,6 +96,11 @@ end
     ad = JACC.Array(ah)
     mxd = JACC.parallel_reduce(SIZE, max, (i,a)->a[i], ad; init = -Inf)
     @test mxd == maximum(ah)
+
+    ah2 = randn((SIZE,SIZE))
+    ad2 = JACC.Array(ah2)
+    mxd = JACC.parallel_reduce((SIZE,SIZE), max, (i,j,a)->a[i,j], ad2; init = -Inf)
+    @test mxd == maximum(ah2)
 end
 
 @testset "shared" begin
