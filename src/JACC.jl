@@ -72,16 +72,16 @@ function parallel_reduce(::ThreadsBackend, N::Integer, op, f::Function, x...; in
 end
 
 function parallel_reduce(
-        ::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
+        ::ThreadsBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
+    ret = init
+    tmp = fill(init, Threads.nthreads())
     @maybe_threaded for j in 1:N
         for i in 1:M
-            tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, j, x...)
+            tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, j, x...))
         end
     end
     for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
+        ret = op.(ret, tmp[i])
     end
     return ret
 end
