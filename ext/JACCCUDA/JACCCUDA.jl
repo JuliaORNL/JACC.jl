@@ -181,7 +181,7 @@ function reduce_kernel_cuda(N, op, red, ret)
     elseif (i <= N)
         tmp = @inbounds red[i]
     end
-    shared_mem[threadIdx().x] = tmp
+    shared_mem[i] = tmp
     sync_threads()
     if (i <= 256)
         shared_mem[i] = op(shared_mem[i], shared_mem[i + 256])
