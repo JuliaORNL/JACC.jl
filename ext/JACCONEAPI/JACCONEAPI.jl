@@ -9,7 +9,9 @@ include("array.jl")
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
+
+function JACC.parallel_for(::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
@@ -18,22 +20,22 @@ function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     # We must know how to get the max shared memory to be used in oneAPI as it is done in CUDA
     #shmem_size = 2 * threads * sizeof(Float64)
     #oneAPI.@sync @oneapi items = items groups = groups shmem = shmem_size _parallel_for_oneapi(f, x...)
-    oneAPI.@sync @oneapi items = items groups = groups _parallel_for_oneapi(f, x...)
+    oneAPI.@sync @oneapi items = items groups = groups _parallel_for_oneapi(N, f, x...)
 end
 
 function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN(
+    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN((M,N),
         f, x...)
 end
 
 function JACC.parallel_for(
-        (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     maxPossibleItems = 16
     Litems = min(M, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
@@ -42,12 +44,12 @@ function JACC.parallel_for(
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
     oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
-        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN(
+        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L,M,N), 
         f, x...)
 end
 
 function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numItems = 256
     items = min(N, numItems)
     groups = ceil(Int, N / items)
@@ -60,7 +62,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numItems = 16
     Mitems = min(M, numItems)
     Nitems = min(N, numItems)
@@ -75,23 +77,29 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function _parallel_for_oneapi(f, x...)
+function _parallel_for_oneapi(N, f, x...)
     i = get_global_id()
+    i > N && return nothing
     f(i, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_MN(f, x...)
+function _parallel_for_oneapi_MN((M,N), f, x...)
     j = get_global_id(0)
     i = get_global_id(1)
+    i > M && return nothing
+    j > N && return nothing
     f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_LMN(f, x...)
+function _parallel_for_oneapi_LMN((L,M,N), f, x...)
     i = get_global_id(0)
     j = get_global_id(1)
     k = get_global_id(2)
+    i > L && return nothing
+    j > M && return nothing
+    k > N && return nothing
     f(i, j, k, x...)
     return nothing
 end
@@ -379,8 +387,6 @@ function JACC.shared(x::oneDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-function __init__()
-    const JACC.Array = oneAPI.oneArray{T, N} where {T, N}
-end
+JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
 
 end # module JACCONEAPI

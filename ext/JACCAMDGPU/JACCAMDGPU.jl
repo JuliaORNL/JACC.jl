@@ -2,26 +2,33 @@ module JACCAMDGPU
 
 using JACC, AMDGPU
 
+const AMDGPUBackend = ROCBackend
+
 # overloaded array functions
 include("array.jl")
+
+include("JACCMULTI.jl")
+using .multi
 
 # overloaded experimental functions
 include("JACCEXPERIMENTAL.jl")
 using .experimental
 
-function JACC.parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
+
+function JACC.parallel_for(::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * threads * sizeof(Float64)
-    @roc groupsize = threads gridsize = blocks shmem = shmem_size _parallel_for_amdgpu(f, x...)
+    @roc groupsize = threads gridsize = blocks shmem = shmem_size _parallel_for_amdgpu(N, f, x...)
     AMDGPU.synchronize()
 end
 
 function JACC.parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::AMDGPUBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -30,12 +37,12 @@ function JACC.parallel_for(
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * Mthreads * Nthreads * sizeof(Float64)
-    @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_MN(f, x...)
+    @roc groupsize = (Mthreads, Nthreads) gridsize = (Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_MN((M,N), f, x...)
     AMDGPU.synchronize()
 end
 
 function JACC.parallel_for(
-        (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
+        ::AMDGPUBackend, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     numThreads = 32
     Lthreads = min(L, numThreads)
@@ -47,12 +54,12 @@ function JACC.parallel_for(
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
-    @roc groupsize = (Lthreads, Mthreads, Nthreads) gridsize = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_LMN(f, x...)
+    @roc groupsize = (Lthreads, Mthreads, Nthreads) gridsize = (Lblocks, Mblocks, Nblocks) shmem = shmem_size _parallel_for_amdgpu_LMN((L,M,N), f, x...)
     AMDGPU.synchronize()
 end
 
 function JACC.parallel_reduce(
-        N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 512
     threads = min(N, numThreads)
     blocks = ceil(Int, N / threads)
@@ -68,7 +75,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::AMDGPUBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
     numThreads = 16
     Mthreads = min(M, numThreads)
     Nthreads = min(N, numThreads)
@@ -85,23 +92,29 @@ function JACC.parallel_reduce(
     return rret
 end
 
-function _parallel_for_amdgpu(f, x...)
+function _parallel_for_amdgpu(N, f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    i > N && return nothing
     f(i, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_MN(f, x...)
+function _parallel_for_amdgpu_MN((M,N), f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    i > M && return nothing
+    j > N && return nothing
     f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_LMN(f, x...)
+function _parallel_for_amdgpu_LMN((L,M,N), f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     k = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
+    i > L && return nothing
+    j > M && return nothing
+    k > N && return nothing
     f(i, j, k, x...)
     return nothing
 end
@@ -389,9 +402,6 @@ function JACC.shared(x::ROCDeviceArray{T,N}) where {T,N}
   return shmem
 end
 
-
-function __init__()
-    const JACC.Array = AMDGPU.ROCArray{T, N} where {T, N}
-end
+JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray{T, N} where {T, N}
 
 end # module JACCAMDGPU
