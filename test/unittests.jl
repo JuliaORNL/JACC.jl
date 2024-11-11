@@ -1,6 +1,12 @@
 import JACC
 using Test
 
+if JACC.JACCPreferences.backend == "oneapi"
+    const FloatType = Float32
+else
+    const FloatType = Float64
+end
+
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
@@ -32,7 +38,7 @@ end
     # Generate random vectors x and y of length N for the interval [0, 100]
     x = round.(rand(Float32, N) * 100)
     y = round.(rand(Float32, N) * 100)
-    alpha = 2.5
+    alpha = FloatType(2.5)
 
     x_device = JACC.Array(x)
     y_device = JACC.Array(y)
@@ -46,8 +52,8 @@ end
 
 @testset "zeros" begin
     N = 10
-    x = JACC.zeros(Float64, N)
-    @test eltype(x) == Float64
+    x = JACC.zeros(FloatType, N)
+    @test eltype(x) == FloatType
     @test zeros(N)≈Array(x) rtol=1e-5
 
     function add_one(i, x)
@@ -60,8 +66,8 @@ end
 
 @testset "ones" begin
     N = 10
-    x = JACC.ones(Float64, N)
-    @test eltype(x) == Float64
+    x = JACC.ones(FloatType, N)
+    @test eltype(x) == FloatType
     @test ones(N)≈Array(x) rtol=1e-5
 
     function minus_one(i, x)
@@ -93,9 +99,9 @@ end
 @testset "shared" begin
     N = 100
     alpha = 2.5
-    x = JACC.ones(Float64, N)
-    x_shared = JACC.ones(Float64, N)
-    y = JACC.ones(Float64, N)
+    x = JACC.ones(FloatType, N)
+    x_shared = JACC.ones(FloatType, N)
+    y = JACC.ones(FloatType, N)
 
     function scal(i, x, y, alpha)
         @inbounds x[i] = y[i] * alpha
@@ -259,19 +265,19 @@ end
     end
 
 	SIZE = 10
-	a0 = JACC.ones(Float64, SIZE)
-	a1 = JACC.ones(Float64, SIZE)
-	a2 = JACC.ones(Float64, SIZE)
-	r = JACC.ones(Float64, SIZE)
-	p = JACC.ones(Float64, SIZE)
-	s = JACC.zeros(Float64, SIZE)
-	x = JACC.zeros(Float64, SIZE)
-	r_old = JACC.zeros(Float64, SIZE)
-	r_aux = JACC.zeros(Float64, SIZE)
+	a0 = JACC.ones(FloatType, SIZE)
+	a1 = JACC.ones(FloatType, SIZE)
+	a2 = JACC.ones(FloatType, SIZE)
+	r = JACC.ones(FloatType, SIZE)
+	p = JACC.ones(FloatType, SIZE)
+	s = JACC.zeros(FloatType, SIZE)
+	x = JACC.zeros(FloatType, SIZE)
+	r_old = JACC.zeros(FloatType, SIZE)
+	r_aux = JACC.zeros(FloatType, SIZE)
 	a1 = a1 * 4
 	r = r * 0.5
 	p = p * 0.5
-	global cond = one(Float64)
+	global cond = one(FloatType)
 
     while cond[1, 1] >= 1e-14
         r_old = copy(r)
