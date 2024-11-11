@@ -1,3 +1,4 @@
+
 module JACC
 
 import Atomix: @atomic
@@ -58,29 +59,29 @@ function parallel_for(
     end
 end
 
-function parallel_reduce(::ThreadsBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
+function parallel_reduce(::ThreadsBackend, N::Integer, op, f::Function, x...; init)
+    ret = init
+    tmp = fill(init, Threads.nthreads())
     @maybe_threaded for i in 1:N
-        tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, x...)
+        tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, x...)) 
     end
     for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
+        ret = op.(ret, tmp[i])
     end
     return ret
 end
 
 function parallel_reduce(
-        ::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
+        ::ThreadsBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
+    ret = init
+    tmp = fill(init, Threads.nthreads())
     @maybe_threaded for j in 1:N
         for i in 1:M
-            tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ f(i, j, x...)
+            tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, j, x...))
         end
     end
     for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
+        ret = op.(ret, tmp[i])
     end
     return ret
 end
@@ -114,12 +115,20 @@ function parallel_for((L, M, N)::Tuple{I, I, I}, f::F, x...) where {I <: Integer
     return parallel_for(default_backend(), (L, M, N), f, x...)
 end
 
-function parallel_reduce(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_reduce(default_backend(), N, f, x...)
+function parallel_reduce(N::I, op, f::F, x...; init) where {I <: Integer, F <: Function}
+    return parallel_reduce(default_backend(), N, op, f, x...; init = init)
 end
 
-function parallel_reduce((M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_reduce(default_backend(), (M, N), f, x...)
+function parallel_reduce(N::Integer, f::Function, x...)
+    return parallel_reduce(N, +, f, x...; init = zero(Float64))
+end
+
+function parallel_reduce((M, N)::Tuple{I, I}, op, f::F, x...; init) where {I <: Integer, F <: Function}
+    return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
+end
+
+function parallel_reduce((M, N)::Tuple{Integer, Integer}, f::Function, x...)
+    return parallel_reduce((M,N), +, f, x...; init = zero(Float64))
 end
 
 end # module JACC

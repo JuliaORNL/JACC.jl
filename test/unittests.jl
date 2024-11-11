@@ -90,6 +90,19 @@ end
     @test Array(counter)[1] == N
 end
 
+@testset "reduce" begin
+    SIZE = 1000
+    ah = randn(SIZE)
+    ad = JACC.Array(ah)
+    mxd = JACC.parallel_reduce(SIZE, max, (i,a)->a[i], ad; init = -Inf)
+    @test mxd == maximum(ah)
+
+    ah2 = randn((SIZE,SIZE))
+    ad2 = JACC.Array(ah2)
+    mxd = JACC.parallel_reduce((SIZE,SIZE), max, (i,j,a)->a[i,j], ad2; init = -Inf)
+    @test mxd == maximum(ah2)
+end
+
 @testset "shared" begin
     N = 100
     alpha = 2.5
@@ -138,7 +151,7 @@ end
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
     jresult = JACC.BLAS.dot(1_000, jx, jy)
 
-    @test Array(jresult)[1]≈ref_result rtol=1e-8
+    @test jresult≈ref_result rtol=1e-8
 end
 
 @testset "Add-2D" begin
@@ -295,7 +308,7 @@ end
 
         JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
         ccond = JACC.parallel_reduce(SIZE, dot, r, r)
-        global cond = Array(ccond)
+        global cond = ccond
         p = copy(r_aux)
     end
     @test cond[1, 1] <= 1e-14
