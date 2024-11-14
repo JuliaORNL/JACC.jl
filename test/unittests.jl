@@ -55,7 +55,7 @@ end
     end
 
     JACC.parallel_for(N, add_one, x)
-    @test ones(N) ≈ Core.Array(x) rtol=1e-5
+    @test ones(N)≈Core.Array(x) rtol=1e-5
 end
 
 @testset "ones" begin
@@ -69,7 +69,7 @@ end
     end
 
     JACC.parallel_for(N, minus_one, x)
-    @test zeros(N) ≈ Array(x) rtol=1e-5
+    @test zeros(N)≈Array(x) rtol=1e-5
 end
 
 @testset "AtomicCounter" begin
@@ -94,12 +94,13 @@ end
     SIZE = 1000
     ah = randn(SIZE)
     ad = JACC.Array(ah)
-    mxd = JACC.parallel_reduce(SIZE, max, (i,a)->a[i], ad; init = -Inf)
+    mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
     @test mxd == maximum(ah)
 
-    ah2 = randn((SIZE,SIZE))
+    ah2 = randn((SIZE, SIZE))
     ad2 = JACC.Array(ah2)
-    mxd = JACC.parallel_reduce((SIZE,SIZE), max, (i,j,a)->a[i,j], ad2; init = -Inf)
+    mxd = JACC.parallel_reduce(
+        (SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
 end
 
@@ -113,9 +114,9 @@ end
     function scal(i, x, y, alpha)
         @inbounds x[i] = y[i] * alpha
     end
-    
+
     function scal_shared(i, x, y, alpha)
-        y_shared = JACC.shared(y) 
+        y_shared = JACC.shared(y)
         @inbounds x[i] = y_shared[i] * alpha
     end
 
@@ -187,13 +188,13 @@ end
 
     C_expected = Float32(2.0) .* ones(Float32, L, M, N)
     @test Array(C)≈C_expected rtol=1e-5
- 
+
     function seq_scal(N, alpha, x)
         for i in 1:N
             @inbounds x[i] = alpha * x[i]
         end
     end
-  
+
     function seq_asum(N, x)
         r = 0.0
         for i in 1:N
@@ -205,7 +206,7 @@ end
     function seq_nrm2(N, x)
         sum_sq = 0.0
         for i in 1:N
-            @inbounds sum_sq += x[i]*x[i]
+            @inbounds sum_sq += x[i] * x[i]
         end
         r = sqrt(sum_sq)
         return r
@@ -216,7 +217,7 @@ end
             @inbounds t = x[i]
             @inbounds x[i] = y1[i]
             @inbounds y1[i] = t
-        end       
+        end
     end
 
     # Comparing JACC.BLAS with regular seuential functions
@@ -226,7 +227,6 @@ end
     # jresult = JACC.BLAS.dot(1_000, jx, jy)
     # result = Array(jresult)        
     # @test result[1]≈ref_result rtol=1e-8
-
 
     # seq_scal(1_000, alpha, x)
     # JACC.BLAS.scal(1_000, alpha, jx)
@@ -239,7 +239,7 @@ end
     # r1 = seq_dot(1_000, x, y) 
     # r2 = JACC.BLAS.dot(1_000, jx, jy)
     # @test r1≈Array(r2)[1] atol=1e-8 
-    
+
     # r1 = seq_asum(1_000, x)
     # r2 = JACC.BLAS.asum(1_000, jx)
     # r1 = seq_nrm2(1_000, x)
@@ -271,20 +271,20 @@ end
         @inbounds x[i] += alpha[1, 1] * y[i]
     end
 
-	SIZE = 10
-	a0 = JACC.ones(Float64, SIZE)
-	a1 = JACC.ones(Float64, SIZE)
-	a2 = JACC.ones(Float64, SIZE)
-	r = JACC.ones(Float64, SIZE)
-	p = JACC.ones(Float64, SIZE)
-	s = JACC.zeros(Float64, SIZE)
-	x = JACC.zeros(Float64, SIZE)
-	r_old = JACC.zeros(Float64, SIZE)
-	r_aux = JACC.zeros(Float64, SIZE)
-	a1 = a1 * 4
-	r = r * 0.5
-	p = p * 0.5
-	global cond = one(Float64)
+    SIZE = 10
+    a0 = JACC.ones(Float64, SIZE)
+    a1 = JACC.ones(Float64, SIZE)
+    a2 = JACC.ones(Float64, SIZE)
+    r = JACC.ones(Float64, SIZE)
+    p = JACC.ones(Float64, SIZE)
+    s = JACC.zeros(Float64, SIZE)
+    x = JACC.zeros(Float64, SIZE)
+    r_old = JACC.zeros(Float64, SIZE)
+    r_aux = JACC.zeros(Float64, SIZE)
+    a1 = a1 * 4
+    r = r * 0.5
+    p = p * 0.5
+    global cond = one(Float64)
 
     while cond[1, 1] >= 1e-14
         r_old = copy(r)
@@ -391,32 +391,32 @@ end
         end
     end
 
-	SIZE = 10
-	f = ones(SIZE * SIZE * 9) .* 2.0
-	f1 = ones(SIZE * SIZE * 9) .* 3.0
-	f2 = ones(SIZE * SIZE * 9) .* 4.0
-	cx = zeros(9)
-	cy = zeros(9)
-	cx[1] = 0
-	cy[1] = 0
-	cx[2] = 1
-	cy[2] = 0
-	cx[3] = -1
-	cy[3] = 0
-	cx[4] = 0
-	cy[4] = 1
-	cx[5] = 0
-	cy[5] = -1
-	cx[6] = 1
-	cy[6] = 1
-	cx[7] = -1
-	cy[7] = 1
-	cx[8] = -1
-	cy[8] = -1
-	cx[9] = 1
-	cy[9] = -1
-	w = ones(9)
-	t = 1.0
+    SIZE = 10
+    f = ones(SIZE * SIZE * 9) .* 2.0
+    f1 = ones(SIZE * SIZE * 9) .* 3.0
+    f2 = ones(SIZE * SIZE * 9) .* 4.0
+    cx = zeros(9)
+    cy = zeros(9)
+    cx[1] = 0
+    cy[1] = 0
+    cx[2] = 1
+    cy[2] = 0
+    cx[3] = -1
+    cy[3] = 0
+    cx[4] = 0
+    cy[4] = 1
+    cx[5] = 0
+    cy[5] = -1
+    cx[6] = 1
+    cy[6] = 1
+    cx[7] = -1
+    cy[7] = 1
+    cx[8] = -1
+    cy[8] = -1
+    cx[9] = 1
+    cy[9] = -1
+    w = ones(9)
+    t = 1.0
 
     df = JACC.Array(f)
     df1 = JACC.Array(f1)
