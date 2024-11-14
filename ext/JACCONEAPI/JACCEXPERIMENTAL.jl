@@ -1,5 +1,5 @@
-module experimental
+module Experimental
 
 using JACC, oneAPI
 
-end # module experimental
+end # module Experimental

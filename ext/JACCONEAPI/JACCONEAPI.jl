@@ -7,11 +7,12 @@ include("array.jl")
 
 # overloaded experimental functions
 include("JACCEXPERIMENTAL.jl")
-using .experimental
+using .Experimental
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
 
-function JACC.parallel_for(::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
+function JACC.parallel_for(
+        ::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
     #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
@@ -20,22 +21,26 @@ function JACC.parallel_for(::oneAPIBackend, N::I, f::F, x...) where {I <: Intege
     # We must know how to get the max shared memory to be used in oneAPI as it is done in CUDA
     #shmem_size = 2 * threads * sizeof(Float64)
     #oneAPI.@sync @oneapi items = items groups = groups shmem = shmem_size _parallel_for_oneapi(f, x...)
-    oneAPI.@sync @oneapi items = items groups = groups _parallel_for_oneapi(N, f, x...)
+    oneAPI.@sync @oneapi items=items groups=groups _parallel_for_oneapi(
+        N, f, x...)
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
+        I <: Integer, F <: Function}
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN((M,N),
+    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN(
+        (M, N),
         f, x...)
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+        ::oneAPIBackend, (L, M, N)::Tuple{I, I}, f::F, x...) where {
+        I <: Integer, F <: Function}
     maxPossibleItems = 16
     Litems = min(M, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
@@ -44,11 +49,12 @@ function JACC.parallel_for(
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
     oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
-        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L,M,N), 
+        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L, M, N),
         f, x...)
 end
 
-function JACC.parallel_reduce(::oneAPIBackend, N::Integer, op, f::Function, x...; init)
+function JACC.parallel_reduce(
+        ::oneAPIBackend, N::Integer, op, f::Function, x...; init)
     numItems = 256
     items = min(N, numItems)
     groups = ceil(Int, N / items)
@@ -56,7 +62,8 @@ function JACC.parallel_reduce(::oneAPIBackend, N::Integer, op, f::Function, x...
     rret = oneAPI.zeros(Float32, 1)
     oneAPI.@sync @oneapi items=items groups=groups _parallel_reduce_oneapi(
         N, op, ret, f, x...)
-    oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(N, op, ret, rret)
+    oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
+        N, op, ret, rret)
     return Core.Array(rret)[]
 end
 
@@ -83,7 +90,7 @@ function _parallel_for_oneapi(N, f, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_MN((M,N), f, x...)
+function _parallel_for_oneapi_MN((M, N), f, x...)
     j = get_global_id(0)
     i = get_global_id(1)
     i > M && return nothing
@@ -92,7 +99,7 @@ function _parallel_for_oneapi_MN((M,N), f, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_LMN((L,M,N), f, x...)
+function _parallel_for_oneapi_LMN((L, M, N), f, x...)
     i = get_global_id(0)
     j = get_global_id(1)
     k = get_global_id(2)
@@ -221,26 +228,33 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
     end
     barrier()
     if (ti <= 8 && tj <= 8 && ti + 8 <= M && tj + 8 <= N)
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 7) * 16) + (tj + 8)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 8)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti + 7) * 16) + (tj + 8)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 8)])
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 7) * 16) + tj])
     end
     barrier()
     if (ti <= 4 && tj <= 4 && ti + 4 <= M && tj + 4 <= N)
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 3) * 16) + (tj + 4)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 4)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti + 3) * 16) + (tj + 4)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 4)])
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 3) * 16) + tj])
     end
     barrier()
     if (ti <= 2 && tj <= 2 && ti + 2 <= M && tj + 2 <= N)
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 1) * 16) + (tj + 2)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 2)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti + 1) * 16) + (tj + 2)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 2)])
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 1) * 16) + tj])
     end
     barrier()
     if (ti == 1 && tj == 1 && ti + 1 <= M && tj + 1 <= N)
         shared_mem[sid] = op(shared_mem[sid], shared_mem[ti * 16 + (tj + 1)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 1)])
+        shared_mem[sid] = op(
+            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 1)])
         shared_mem[sid] = op(shared_mem[sid], shared_mem[ti * 16 + tj])
         ret[bi, bj] = shared_mem[sid]
     end
@@ -286,37 +300,46 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     barrier()
     if (i <= 8 && j <= 8)
         if (i + 8 <= M && j + 8 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 7) * 16) + (j + 8)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 7) * 16) + (j + 8)])
         end
         if (i <= M && j + 8 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 8)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 8)])
         end
         if (i + 8 <= M && j <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 7) * 16) + j])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 7) * 16) + j])
         end
     end
     barrier()
     if (i <= 4 && j <= 4)
         if (i + 4 <= M && j + 4 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 3) * 16) + (j + 4)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 3) * 16) + (j + 4)])
         end
         if (i <= M && j + 4 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 4)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 4)])
         end
         if (i + 4 <= M && j <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 3) * 16) + j])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 3) * 16) + j])
         end
     end
     barrier()
     if (i <= 2 && j <= 2)
         if (i + 2 <= M && j + 2 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 1) * 16) + (j + 2)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 1) * 16) + (j + 2)])
         end
         if (i <= M && j + 2 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 2)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 2)])
         end
         if (i + 2 <= M && j <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i + 1) * 16) + j])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i + 1) * 16) + j])
         end
     end
     barrier()
@@ -325,7 +348,8 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
             shared_mem[sid] = op(shared_mem[sid], shared_mem[i * 16 + (j + 1)])
         end
         if (i <= M && j + 1 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 1)])
+            shared_mem[sid] = op(
+                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 1)])
         end
         if (i + 1 <= M && j <= N)
             shared_mem[sid] = op(shared_mem[sid], shared_mem[i * 16 + j])
@@ -335,51 +359,51 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(x::oneDeviceArray{T,N}) where {T,N}
-  size::Int32 = length(x)
-  # This is wrong, we should use size not 512 ...
-  shmem = oneLocalArray(T, 512)
-  num_threads = get_local_size(0) * get_local_size(1)
-  if (size <= num_threads)
-    if get_local_size(1) == 1
-      ind = get_global_id(0)
-      @inbounds shmem[ind] = x[ind]
-    else
-      i_local = get_local_id(0)
-      j_local = get_local_id(1)
-      ind = i_local - 1 * get_local_size(0) + j_local
-      if ndims(x) == 1
-        @inbounds shmem[ind] = x[ind]
-      elseif ndims(x) == 2
-        @inbounds shmem[ind] = x[i_local,j_local]
-      end
-    end
-  else
-    if get_local_size(1) == 1
-      ind = get_local_id(0)
-      for i in get_local_size(0):get_local_size(0):size
-        @inbounds shmem[ind] = x[ind]
-        ind += get_local_size(0)
-      end
-    else
-      i_local = get_local_id(0)
-      j_local = get_local_id(1)
-      ind = (i_local - 1) * get_local_size(0) + j_local
-      if ndims(x) == 1
-        for i in num_threads:num_threads:size
-          @inbounds shmem[ind] = x[ind]
-          ind += num_threads
+function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
+    size::Int32 = length(x)
+    # This is wrong, we should use size not 512 ...
+    shmem = oneLocalArray(T, 512)
+    num_threads = get_local_size(0) * get_local_size(1)
+    if (size <= num_threads)
+        if get_local_size(1) == 1
+            ind = get_global_id(0)
+            @inbounds shmem[ind] = x[ind]
+        else
+            i_local = get_local_id(0)
+            j_local = get_local_id(1)
+            ind = i_local - 1 * get_local_size(0) + j_local
+            if ndims(x) == 1
+                @inbounds shmem[ind] = x[ind]
+            elseif ndims(x) == 2
+                @inbounds shmem[ind] = x[i_local, j_local]
+            end
         end
-      elseif ndims(x) == 2
-        for i in num_threads:num_threads:size
-          @inbounds shmem[ind] = x[i_local,j_local]
-          ind += num_threads
-       end
-      end  
+    else
+        if get_local_size(1) == 1
+            ind = get_local_id(0)
+            for i in get_local_size(0):get_local_size(0):size
+                @inbounds shmem[ind] = x[ind]
+                ind += get_local_size(0)
+            end
+        else
+            i_local = get_local_id(0)
+            j_local = get_local_id(1)
+            ind = (i_local - 1) * get_local_size(0) + j_local
+            if ndims(x) == 1
+                for i in num_threads:num_threads:size
+                    @inbounds shmem[ind] = x[ind]
+                    ind += num_threads
+                end
+            elseif ndims(x) == 2
+                for i in num_threads:num_threads:size
+                    @inbounds shmem[ind] = x[i_local, j_local]
+                    ind += num_threads
+                end
+            end
+        end
     end
-  end
-  barrier()
-  return shmem
+    barrier()
+    return shmem
 end
 
 JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
