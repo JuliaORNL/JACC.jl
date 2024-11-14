@@ -86,7 +86,7 @@ end
 
     N = Int32(10)
     # Generate random vectors x and y of length N for the interval [0, 100]
-    alpha = 2.5
+    alpha = FloatType(2.5)
 
     x = JACC.Array(round.(rand(Float32, N) * 100))
     y = JACC.Array(round.(rand(Float32, N) * 100))
@@ -98,7 +98,7 @@ end
 
 @testset "shared" begin
     N = 100
-    alpha = 2.5
+    alpha = FloatType(2.5)
     x = JACC.ones(FloatType, N)
     x_shared = JACC.ones(FloatType, N)
     y = JACC.ones(FloatType, N)
@@ -122,7 +122,7 @@ end
     y = ones(1_000)
     jx = JACC.ones(1_000)
     jy = JACC.ones(1_000)
-    alpha = 2.0
+    alpha = FloatType(2.0)
 
     function seq_axpy(N, alpha, x, y)
         for i in 1:N

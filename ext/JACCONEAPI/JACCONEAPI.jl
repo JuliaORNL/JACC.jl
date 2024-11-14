@@ -105,12 +105,12 @@ function _parallel_for_oneapi_LMN((L,M,N), f, x...)
 end
 
 function _parallel_reduce_oneapi(N, ret, f, x...)
-    #shared_mem = oneLocalArray(Float32, 256)
-    shared_mem = oneLocalArray(Float64, 256)
+    shared_mem = oneLocalArray(Float32, 256)
+    # shared_mem = oneLocalArray(Float64, 256)
     i = get_global_id(0)
     ti = get_local_id(0)
-    #tmp::Float32 = 0.0
-    tmp::Float64 = 0.0
+    tmp::Float32 = 0.0
+    # tmp::Float64 = 0.0
     shared_mem[ti] = 0.0
     if i <= N
         tmp = @inbounds f(i, x...)
@@ -154,12 +154,12 @@ function _parallel_reduce_oneapi(N, ret, f, x...)
 end
 
 function reduce_kernel_oneapi(N, red, ret)
-    #shared_mem = oneLocalArray(Float32, 256)
-    shared_mem = oneLocalArray(Float64, 256)
+    shared_mem = oneLocalArray(Float32, 256)
+    # shared_mem = oneLocalArray(Float64, 256)
     i = get_global_id()
     ii = i
-    #tmp::Float32 = 0.0
-    tmp::Float64 = 0.0
+    tmp::Float32 = 0.0
+    # tmp::Float64 = 0.0
     if N > 256
         while ii <= N
             tmp += @inbounds red[ii]
@@ -206,8 +206,8 @@ function reduce_kernel_oneapi(N, red, ret)
 end
 
 function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
-    #shared_mem = oneLocalArray(Float32, 16 * 16)
-    shared_mem = oneLocalArray(Float64, 16 * 16)
+    shared_mem = oneLocalArray(Float32, 16 * 16)
+    # shared_mem = oneLocalArray(Float64, 16 * 16)
     i = get_global_id(0)
     j = get_global_id(1)
     ti = get_local_id(0)
@@ -215,8 +215,8 @@ function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
     bi = get_group_id(0)
     bj = get_group_id(1)
 
-    #tmp::Float32 = 0.0
-    tmp::Float64 = 0.0
+    tmp::Float32 = 0.0
+    # tmp::Float64 = 0.0
     shared_mem[((ti - 1) * 16) + tj] = tmp
 
     if (i <= M && j <= N)
@@ -252,15 +252,15 @@ function _parallel_reduce_oneapi_MN((M, N), ret, f, x...)
 end
 
 function reduce_kernel_oneapi_MN((M, N), red, ret)
-    #shared_mem = oneLocalArray(Float32, 16 * 16)
-    shared_mem = oneLocalArray(Float64, 16 * 16)
+    shared_mem = oneLocalArray(Float32, 16 * 16)
+    # shared_mem = oneLocalArray(Float64, 16 * 16)
     i = get_local_id(0)
     j = get_local_id(1)
     ii = i
     jj = j
 
-    #tmp::Float32 = 0.0
-    tmp::Float64 = 0.0
+    tmp::Float32 = 0.0
+    # tmp::Float64 = 0.0
     shared_mem[(i - 1) * 16 + j] = tmp
 
     if M > 16 && N > 16
