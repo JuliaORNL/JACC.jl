@@ -93,6 +93,8 @@ end
 
 array_type(::ThreadsBackend) = Base.Array{T, N} where {T, N}
 
+default_float(::Any) = Float64
+
 function shared(x::Base.Array{T, N}) where {T, N}
     return x
 end
@@ -107,6 +109,8 @@ end
 (::Type{Array})(args...; kwargs...) = array_type()(args...; kwargs...)
 
 array_type() = array_type(default_backend())
+
+default_float() = default_float(default_backend())
 
 function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
     return parallel_for(default_backend(), N, f, x...)
@@ -137,7 +141,7 @@ function parallel_reduce((M, N)::Tuple{I, I}, op, f::F, x...;
 end
 
 function parallel_reduce((M, N)::Tuple{Integer, Integer}, f::Function, x...)
-    return parallel_reduce((M, N), +, f, x...; init = zero(Float64))
+    return parallel_reduce((M, N), +, f, x...; init = zero(default_float()))
 end
 
 end # module JACC

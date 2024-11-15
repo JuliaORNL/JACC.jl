@@ -1,11 +1,7 @@
 import JACC
 using Test
 
-if JACC.JACCPreferences.backend == "oneapi"
-    const FloatType = Float32
-else
-    const FloatType = Float64
-end
+const FloatType = JACC.default_float()
 
 @testset "VectorAddLambda" begin
     function f(i, a)

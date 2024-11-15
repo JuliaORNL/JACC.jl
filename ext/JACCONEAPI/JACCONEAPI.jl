@@ -1,6 +1,6 @@
 module JACCONEAPI
 
-using JACC, oneAPI
+using JACC, oneAPI, oneAPI.oneL0
 
 # overloaded array functions
 include("array.jl")
@@ -407,5 +407,19 @@ function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
 end
 
 JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
+
+function _get_default_float()
+    if oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
+        return Float64
+    else
+        return Float32
+    end
+end
+
+const DefaultFloat = _get_default_float()
+
+function JACC.default_float(::oneAPIBackend)
+    return .DefaultFloat
+end
 
 end # module JACCONEAPI
