@@ -39,7 +39,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::Tuple{I, I}, f::F, x...) where {
+        ::oneAPIBackend, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
     maxPossibleItems = 16
     Litems = min(M, maxPossibleItems)
@@ -58,8 +58,8 @@ function JACC.parallel_reduce(
     numItems = 256
     items = min(N, numItems)
     groups = ceil(Int, N / items)
-    ret = oneAPI.zeros(Float32, groups)
-    rret = oneAPI.zeros(Float32, 1)
+    ret = oneAPI.zeros(typeof(init), groups)
+    rret = oneAPI.zeros(typeof(init), 1)
     oneAPI.@sync @oneapi items=items groups=groups _parallel_reduce_oneapi(
         N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
@@ -74,8 +74,8 @@ function JACC.parallel_reduce(
     Nitems = min(N, numItems)
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
-    ret = oneAPI.zeros(Float32, (Mgroups, Ngroups))
-    rret = oneAPI.zeros(Float32, 1)
+    ret = oneAPI.zeros(typeof(init), (Mgroups, Ngroups))
+    rret = oneAPI.zeros(typeof(init), 1)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
@@ -111,12 +111,10 @@ function _parallel_for_oneapi_LMN((L, M, N), f, x...)
 end
 
 function _parallel_reduce_oneapi(N, op, ret, f, x...)
-    #shared_mem = oneLocalArray(Float32, 256)
-    shared_mem = oneLocalArray(Float64, 256)
+    shared_mem = oneLocalArray(eltype(ret), 256)
     i = get_global_id(0)
     ti = get_local_id(0)
-    #tmp::Float32 = 0.0
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     shared_mem[ti] = 0.0
     if i <= N
         tmp = @inbounds f(i, x...)
@@ -160,10 +158,10 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
 end
 
 function reduce_kernel_oneapi(N, op, red, ret)
-    shared_mem = oneLocalArray(Float64, 256)
+    shared_mem = oneLocalArray(eltype(ret), 256)
     i = get_global_id()
     ii = i
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     if N > 256
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -210,7 +208,7 @@ function reduce_kernel_oneapi(N, op, red, ret)
 end
 
 function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
-    shared_mem = oneLocalArray(Float64, 16 * 16)
+    shared_mem = oneLocalArray(eltype(ret), 16 * 16)
     i = get_global_id(0)
     j = get_global_id(1)
     ti = get_local_id(0)
@@ -218,7 +216,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
     bi = get_group_id(0)
     bj = get_group_id(1)
 
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
     shared_mem[sid] = tmp
 
@@ -262,13 +260,13 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
 end
 
 function reduce_kernel_oneapi_MN((M, N), op, red, ret)
-    shared_mem = oneLocalArray(Float64, 16 * 16)
+    shared_mem = oneLocalArray(eltype(ret), 16 * 16)
     i = get_local_id(0)
     j = get_local_id(1)
     ii = i
     jj = j
 
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
@@ -408,6 +406,8 @@ end
 
 JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
 
+DefaultFloat = Union{Type, Nothing}
+
 function _get_default_float()
     if oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
         return Float64
@@ -416,10 +416,12 @@ function _get_default_float()
     end
 end
 
-const DefaultFloat = _get_default_float()
-
 function JACC.default_float(::oneAPIBackend)
-    return .DefaultFloat
+    global DefaultFloat
+    if isa(nothing, DefaultFloat)
+        DefaultFloat = _get_default_float()
+    end
+    return DefaultFloat
 end
 
 end # module JACCONEAPI

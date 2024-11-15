@@ -94,15 +94,14 @@ end
 
 @testset "reduce" begin
     SIZE = 1000
-    ah = randn(SIZE)
+    ah = randn(FloatType, SIZE)
     ad = JACC.Array(ah)
-    mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
+    mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = FloatType(-Inf))
     @test mxd == maximum(ah)
 
-    ah2 = randn((SIZE, SIZE))
+    ah2 = randn(FloatType, (SIZE, SIZE))
     ad2 = JACC.Array(ah2)
-    mxd = JACC.parallel_reduce(
-        (SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
+    mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = FloatType(-Inf))
     @test mxd == maximum(ah2)
 end
 
@@ -284,8 +283,8 @@ end
 	r_old = JACC.zeros(FloatType, SIZE)
 	r_aux = JACC.zeros(FloatType, SIZE)
     a1 = a1 * 4
-    r = r * 0.5
-    p = p * 0.5
+    r = r * FloatType(0.5)
+    p = p * FloatType(0.5)
 	global cond = one(FloatType)
 
     while cond[1, 1] >= 1e-14
@@ -297,7 +296,7 @@ end
         alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
 
         alpha = alpha0 / alpha1
-        negative_alpha = alpha * (-1.0)
+        negative_alpha = alpha * FloatType(-1.0)
 
         JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
         JACC.parallel_for(SIZE, axpy, alpha, x, p)
@@ -318,9 +317,9 @@ end
 
 @testset "LBM" begin
     function lbm_kernel(x, y, f, f1, f2, t, w, cx, cy, SIZE)
-        u = 0.0
-        v = 0.0
-        p = 0.0
+        u = FloatType(0.0)
+        v = FloatType(0.0)
+        p = FloatType(0.0)
         x_stream = 0
         y_stream = 0
 
@@ -394,11 +393,11 @@ end
     end
 
     SIZE = 10
-    f = ones(SIZE * SIZE * 9) .* 2.0
-    f1 = ones(SIZE * SIZE * 9) .* 3.0
-    f2 = ones(SIZE * SIZE * 9) .* 4.0
-    cx = zeros(9)
-    cy = zeros(9)
+    f = ones(FloatType, SIZE * SIZE * 9) .* FloatType(2.0)
+    f1 = ones(FloatType, SIZE * SIZE * 9) .* FloatType(3.0)
+    f2 = ones(FloatType, SIZE * SIZE * 9) .* FloatType(4.0)
+    cx = zeros(FloatType, 9)
+    cy = zeros(FloatType, 9)
     cx[1] = 0
     cy[1] = 0
     cx[2] = 1
@@ -417,8 +416,8 @@ end
     cy[8] = -1
     cx[9] = 1
     cy[9] = -1
-    w = ones(9)
-    t = 1.0
+    w = ones(FloatType, 9)
+    t = FloatType(1.0)
 
     df = JACC.Array(f)
     df1 = JACC.Array(f1)

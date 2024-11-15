@@ -75,9 +75,9 @@ function JACC.parallel_reduce(
     blocks = ceil(Int, N / threads)
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, blocks), init)
     rret = CUDA.CuArray([init])
-    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _parallel_reduce_cuda(
+    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(typeof(init)) _parallel_reduce_cuda(
         N, op, ret, f, x...)
-    CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) reduce_kernel_cuda(
+    CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(typeof(init)) reduce_kernel_cuda(
         blocks, op, ret, rret)
     return Core.Array(rret)[]
 end
@@ -93,10 +93,10 @@ function JACC.parallel_reduce(
     rret = CUDA.CuArray([init])
     CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
                                                                                   16 *
-                                                                                  sizeof(Float64) _parallel_reduce_cuda_MN(
+                                                                                  sizeof(typeof(init)) _parallel_reduce_cuda_MN(
         (M, N), op, ret, f, x...)
     CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=16 * 16 *
-                                                                      sizeof(Float64) reduce_kernel_cuda_MN(
+    sizeof(typeof(init)) reduce_kernel_cuda_MN(
         (Mblocks, Nblocks), op, ret, rret)
     return Core.Array(rret)[]
 end
@@ -129,10 +129,10 @@ function _parallel_for_cuda_LMN((L, M, N), f, x...)
 end
 
 function _parallel_reduce_cuda(N, op, ret, f, x...)
-    shared_mem = @cuDynamicSharedMem(Float64, 512)
+    shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     ti = threadIdx().x
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     shared_mem[ti] = 0.0
 
     if i <= N
@@ -180,10 +180,10 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
 end
 
 function reduce_kernel_cuda(N, op, red, ret)
-    shared_mem = @cuDynamicSharedMem(Float64, 512)
+    shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
     i = threadIdx().x
     ii = i
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     if N > 512
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -234,7 +234,7 @@ function reduce_kernel_cuda(N, op, red, ret)
 end
 
 function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
-    shared_mem = @cuDynamicSharedMem(Float64, 16*16)
+    shared_mem = @cuDynamicSharedMem(eltype(ret), 16*16)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     ti = threadIdx().x
@@ -242,7 +242,7 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
     bi = blockIdx().x
     bj = blockIdx().y
 
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
     shared_mem[sid] = tmp
 
@@ -286,13 +286,13 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
 end
 
 function reduce_kernel_cuda_MN((M, N), op, red, ret)
-    shared_mem = @cuDynamicSharedMem(Float64, 16*16)
+    shared_mem = @cuDynamicSharedMem(eltype(ret), 16*16)
     i = threadIdx().x
     j = threadIdx().y
     ii = i
     jj = j
 
-    tmp::Float64 = 0.0
+    tmp::eltype(ret) = 0.0
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 

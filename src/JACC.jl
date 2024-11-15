@@ -132,7 +132,7 @@ function parallel_reduce(
 end
 
 function parallel_reduce(N::Integer, f::Function, x...)
-    return parallel_reduce(N, +, f, x...; init = zero(Float64))
+    return parallel_reduce(N, +, f, x...; init = zero(default_float()))
 end
 
 function parallel_reduce((M, N)::Tuple{I, I}, op, f::F, x...;
