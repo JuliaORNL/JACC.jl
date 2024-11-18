@@ -1,8 +1,6 @@
 import JACC
 using Test
 
-const FloatType = JACC.default_float()
-
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
@@ -34,7 +32,7 @@ end
     # Generate random vectors x and y of length N for the interval [0, 100]
     x = round.(rand(Float32, N) * 100)
     y = round.(rand(Float32, N) * 100)
-    alpha = FloatType(2.5)
+    alpha = 2.5
 
     x_device = JACC.Array(x)
     y_device = JACC.Array(y)
@@ -48,7 +46,7 @@ end
 
 @testset "zeros" begin
     N = 10
-    x = JACC.zeros(FloatType, N)
+    x = JACC.zeros(N)
     @test eltype(x) == FloatType
     @test zeros(N)≈Array(x) rtol=1e-5
 
@@ -62,7 +60,7 @@ end
 
 @testset "ones" begin
     N = 10
-    x = JACC.ones(FloatType, N)
+    x = JACC.ones(N)
     @test eltype(x) == FloatType
     @test ones(N)≈Array(x) rtol=1e-5
 
@@ -82,7 +80,7 @@ end
 
     N = Int32(10)
     # Generate random vectors x and y of length N for the interval [0, 100]
-    alpha = FloatType(2.5)
+    alpha = 2.5
 
     x = JACC.Array(round.(rand(Float32, N) * 100))
     y = JACC.Array(round.(rand(Float32, N) * 100))
@@ -96,21 +94,21 @@ end
     SIZE = 1000
     ah = randn(FloatType, SIZE)
     ad = JACC.Array(ah)
-    mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = FloatType(-Inf))
+    mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
     @test mxd == maximum(ah)
 
     ah2 = randn(FloatType, (SIZE, SIZE))
     ad2 = JACC.Array(ah2)
-    mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = FloatType(-Inf))
+    mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
 end
 
 @testset "shared" begin
     N = 100
-    alpha = FloatType(2.5)
-    x = JACC.ones(FloatType, N)
-    x_shared = JACC.ones(FloatType, N)
-    y = JACC.ones(FloatType, N)
+    alpha = 2.5
+    x = JACC.ones(N)
+    x_shared = JACC.ones(N)
+    y = JACC.ones(N)
 
     function scal(i, x, y, alpha)
         @inbounds x[i] = y[i] * alpha
@@ -131,7 +129,7 @@ end
     y = ones(1_000)
     jx = JACC.ones(1_000)
     jy = JACC.ones(1_000)
-    alpha = FloatType(2.0)
+    alpha = 2.0
 
     function seq_axpy(N, alpha, x, y)
         for i in 1:N
@@ -273,19 +271,19 @@ end
     end
 
     SIZE = 10
-	a0 = JACC.ones(FloatType, SIZE)
-	a1 = JACC.ones(FloatType, SIZE)
-	a2 = JACC.ones(FloatType, SIZE)
-	r = JACC.ones(FloatType, SIZE)
-	p = JACC.ones(FloatType, SIZE)
-	s = JACC.zeros(FloatType, SIZE)
-	x = JACC.zeros(FloatType, SIZE)
-	r_old = JACC.zeros(FloatType, SIZE)
-	r_aux = JACC.zeros(FloatType, SIZE)
+	a0 = JACC.ones(SIZE)
+	a1 = JACC.ones(SIZE)
+	a2 = JACC.ones(SIZE)
+	r = JACC.ones(SIZE)
+	p = JACC.ones(SIZE)
+	s = JACC.zeros(SIZE)
+	x = JACC.zeros(SIZE)
+	r_old = JACC.zeros(SIZE)
+	r_aux = JACC.zeros(SIZE)
     a1 = a1 * 4
-    r = r * FloatType(0.5)
-    p = p * FloatType(0.5)
-	global cond = one(FloatType)
+    r = r * 0.5
+    p = p * 0.5
+	global cond = 1.0
 
     while cond[1, 1] >= 1e-14
         r_old = copy(r)
@@ -296,7 +294,7 @@ end
         alpha1 = JACC.parallel_reduce(SIZE, dot, p, s)
 
         alpha = alpha0 / alpha1
-        negative_alpha = alpha * FloatType(-1.0)
+        negative_alpha = alpha * -1.0
 
         JACC.parallel_for(SIZE, axpy, negative_alpha, r, s)
         JACC.parallel_for(SIZE, axpy, alpha, x, p)
@@ -317,9 +315,9 @@ end
 
 @testset "LBM" begin
     function lbm_kernel(x, y, f, f1, f2, t, w, cx, cy, SIZE)
-        u = FloatType(0.0)
-        v = FloatType(0.0)
-        p = FloatType(0.0)
+        u = 0.0
+        v = 0.0
+        p = 0.0
         x_stream = 0
         y_stream = 0
 
@@ -329,7 +327,7 @@ end
                 @inbounds y_stream = y - cy[k]
                 ind = (k - 1) * SIZE * SIZE + x * SIZE + y
                 iind = (k - 1) * SIZE * SIZE + x_stream * SIZE + y_stream
-                @inbounds f[trunc(Int, ind)] = f1[trunc(Int, iind)]
+                @inbounds f[floor(Int, ind)] = f1[floor(Int, iind)]
             end
             for k in 1:9
                 ind = (k - 1) * SIZE * SIZE + x * SIZE + y
@@ -345,7 +343,7 @@ end
                                 (1.0 + 3.0 * cu + cu * cu -
                                  1.5 * ((u * u) + (v * v)))
                 ind = (k - 1) * SIZE * SIZE + x * SIZE + y
-                @inbounds f2[trunc(Int, ind)] = f[trunc(Int, ind)] *
+                @inbounds f2[floor(Int, ind)] = f[floor(Int, ind)] *
                                                 (1.0 - 1.0 / t) + feq * 1 / t
             end
         end
@@ -393,11 +391,11 @@ end
     end
 
     SIZE = 10
-    f = ones(FloatType, SIZE * SIZE * 9) .* FloatType(2.0)
-    f1 = ones(FloatType, SIZE * SIZE * 9) .* FloatType(3.0)
-    f2 = ones(FloatType, SIZE * SIZE * 9) .* FloatType(4.0)
-    cx = zeros(FloatType, 9)
-    cy = zeros(FloatType, 9)
+    f = ones(SIZE * SIZE * 9) .* 2.0
+    f1 = ones(SIZE * SIZE * 9) .* 3.0
+    f2 = ones(SIZE * SIZE * 9) .* 4.0
+    cx = zeros(Int, 9)
+    cy = zeros(Int, 9)
     cx[1] = 0
     cy[1] = 0
     cx[2] = 1
@@ -416,8 +414,8 @@ end
     cy[8] = -1
     cx[9] = 1
     cy[9] = -1
-    w = ones(FloatType, 9)
-    t = FloatType(1.0)
+    w = ones(9)
+    t = 1.0
 
     df = JACC.Array(f)
     df1 = JACC.Array(f1)

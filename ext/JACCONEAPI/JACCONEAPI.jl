@@ -412,6 +412,9 @@ function _get_default_float()
     if oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
         return Float64
     else
+        @info """Float64 unsupported on the current device.
+        Default float for JACC.jl changed to Float32.
+        """
         return Float32
     end
 end
