@@ -32,7 +32,7 @@ jobs:
         run: julia -t 4 --project -e 'using Pkg; Pkg.test()'
 
   macos:
-    runs-on: macos-12
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
