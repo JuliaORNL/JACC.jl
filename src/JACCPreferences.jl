@@ -3,10 +3,12 @@ module JACCPreferences
 
 using Preferences
 
+const supported_backends = ("threads", "cuda", "amdgpu", "oneapi")
+
 # taken from https://github.com/JuliaPackaging/Preferences.jl
 function set_backend(new_backend::String)
     new_backend_lc = lowercase(new_backend)
-    if !(new_backend_lc in ("threads", "cuda", "amdgpu", "oneapi"))
+    if !(new_backend_lc in supported_backends)
         throw(ArgumentError("Invalid backend: \"$(new_backend)\""))
     end
 
