@@ -19,43 +19,6 @@ end
     @test eltype(x) == Float64
 end
 
-# @testset VectorAddLoop begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     @jacc
-#     for i in 1:N
-#         C[i] = A[i] + B[i]
-#     end
-# end
-
-# @testset VectorReduce begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     @jacc reduction(C)
-#     for i in 1:N
-#         C += A[i] * B[i]
-#     end
-# end
-
-# @testset VectorAddLoopKernel begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     function kernel(i, A, B)
-
-#     end
-
-#     @jacc
-#     for i in 1:N
-#         C[i] = A[i] + B[i]
-#     end
-# end
-
 #@testset "JACC.Multi" begin
 
 #    x = ones(1_000)
