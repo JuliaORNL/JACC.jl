@@ -1,61 +1,23 @@
-using CUDA
-import JACC
-using Test
 
-@testset "TestBackend" begin
+@testitem "TestBackend" setup=[JACCTestItem] tags=[:cuda] begin
     @test JACC.JACCPreferences.backend == "cuda"
 end
 
-@testset "zeros_type" begin
+@testitem "zeros_type" setup=[JACCTestItem] tags=[:cuda] begin
+    using CUDA
     N = 10
     x = JACC.zeros(Float64, N)
     @test typeof(x) == CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}
     @test eltype(x) == Float64
 end
 
-@testset "ones_type" begin
+@testitem "ones_type" setup=[JACCTestItem] tags=[:cuda] begin
+    using CUDA
     N = 10
     x = JACC.ones(Float64, N)
     @test typeof(x) == CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}
     @test eltype(x) == Float64
 end
-
-# @testset VectorAddLoop begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     @jacc
-#     for i in 1:N
-#         C[i] = A[i] + B[i]
-#     end
-# end
-
-# @testset VectorReduce begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     @jacc reduction(C)
-#     for i in 1:N
-#         C += A[i] * B[i]
-#     end
-# end
-
-# @testset VectorAddLoopKernel begin
-#     N = 1024
-#     A = JACC.Array{Float32}(1, N)
-#     B = JACC.Array{Float32}(1, N)
-
-#     function kernel(i, A, B)
-
-#     end
-
-#     @jacc
-#     for i in 1:N
-#         C[i] = A[i] + B[i]
-#     end
-# end
 
 #@testset "JACC.Multi" begin
 

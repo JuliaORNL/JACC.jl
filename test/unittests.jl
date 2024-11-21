@@ -1,7 +1,5 @@
-import JACC
-using Test
 
-@testset "VectorAddLambda" begin
+@testitem "VectorAddLambda" setup=[JACCTestItem] begin
     function f(i, a)
         @inbounds a[i] += 5.0
     end
@@ -14,10 +12,10 @@ using Test
     JACC.parallel_for(N, f, a_device)
 
     a_expected = a .+ 5.0
-    @test Array(a_device)≈a_expected rtol=1e-5
+    @test Core.Array(a_device)≈a_expected rtol=1e-5
 end
 
-@testset "AXPY" begin
+@testitem "AXPY" setup=[JACCTestItem] begin
     function axpy(i, alpha, x, y)
         @inbounds x[i] += alpha * y[i]
     end
@@ -41,14 +39,14 @@ end
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)
 
-    @test Array(x_device)≈x_expected rtol=1e-1
+    @test Core.Array(x_device)≈x_expected rtol=1e-1
 end
 
-@testset "zeros" begin
+@testitem "zeros" setup=[JACCTestItem] begin
     N = 10
     x = JACC.zeros(N)
     @test eltype(x) == FloatType
-    @test zeros(N)≈Array(x) rtol=1e-5
+    @test zeros(N)≈Core.Array(x) rtol=1e-5
 
     function add_one(i, x)
         @inbounds x[i] += 1
@@ -58,21 +56,21 @@ end
     @test ones(N)≈Core.Array(x) rtol=1e-5
 end
 
-@testset "ones" begin
+@testitem "ones" setup=[JACCTestItem] begin
     N = 10
     x = JACC.ones(N)
     @test eltype(x) == FloatType
-    @test ones(N)≈Array(x) rtol=1e-5
+    @test ones(N)≈Core.Array(x) rtol=1e-5
 
     function minus_one(i, x)
         @inbounds x[i] -= 1
     end
 
     JACC.parallel_for(N, minus_one, x)
-    @test zeros(N)≈Array(x) rtol=1e-5
+    @test zeros(N)≈Core.Array(x) rtol=1e-5
 end
 
-@testset "AtomicCounter" begin
+@testitem "AtomicCounter" setup=[JACCTestItem] begin
     function axpy_counter!(i, alpha, x, y, counter)
         @inbounds x[i] += alpha * y[i]
         JACC.@atomic counter[1] += 1
@@ -87,10 +85,10 @@ end
     counter = JACC.Array{Int32}([0])
     JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
 
-    @test Array(counter)[1] == N
+    @test Core.Array(counter)[1] == N
 end
 
-@testset "reduce" begin
+@testitem "reduce" setup=[JACCTestItem] begin
     SIZE = 1000
     ah = randn(FloatType, SIZE)
     ad = JACC.Array(ah)
@@ -103,7 +101,7 @@ end
     @test mxd == maximum(ah2)
 end
 
-@testset "shared" begin
+@testitem "shared" setup=[JACCTestItem] begin
     N = 100
     alpha = 2.5
     x = JACC.ones(N)
@@ -124,13 +122,7 @@ end
     @test x≈x_shared rtol=1e-8
 end
 
-@testset "JACC.BLAS" begin
-    x = ones(1_000)
-    y = ones(1_000)
-    jx = JACC.ones(1_000)
-    jy = JACC.ones(1_000)
-    alpha = 2.0
-
+@testitem "JACC.BLAS" setup=[JACCTestItem] begin
     function seq_axpy(N, alpha, x, y)
         for i in 1:N
             @inbounds x[i] += alpha * y[i]
@@ -145,6 +137,12 @@ end
         return r
     end
 
+    x = ones(1_000)
+    y = ones(1_000)
+    jx = JACC.ones(1_000)
+    jy = JACC.ones(1_000)
+    alpha = 2.0
+
     seq_axpy(1_000, alpha, x, y)
     ref_result = seq_dot(1_000, x, y)
 
@@ -152,9 +150,78 @@ end
     jresult = JACC.BLAS.dot(1_000, jx, jy)
 
     @test jresult≈ref_result rtol=1e-8
+
+    x = ones(1_000)
+    y = ones(1_000)
+    y1 = y*2
+    jx = JACC.ones(1_000)
+    jy = JACC.ones(1_000)
+    jy1 = jy*2
+    alpha = 2.0
+  
+    function seq_scal(N, alpha, x)
+        for i in 1:N
+            @inbounds x[i] = alpha * x[i]
+        end
+    end
+ 
+    function seq_asum(N, x)
+        r = 0.0
+        for i in 1:N
+            @inbounds r += abs(x[i])
+        end
+        return r
+    end
+ 
+    function seq_nrm2(N, x)
+        sum_sq = 0.0
+        for i in 1:N
+            @inbounds sum_sq += x[i]*x[i]
+        end
+        r = sqrt(sum_sq)
+        return r
+    end
+ 
+    function seq_swap(N, x, y1)
+        for i in 1:N
+            @inbounds t = x[i]
+            @inbounds x[i] = y1[i]
+            @inbounds y1[i] = t
+        end       
+    end
+
+    ref_result = seq_axpy(1_000, alpha, x, y)
+    ref_result = seq_dot(1_000, x, y)   
+    JACC.BLAS.axpy(1_000, alpha, jx, jy)
+    jresult = JACC.BLAS.dot(1_000, jx, jy)
+    @test jresult≈ref_result rtol=1e-8
+
+    seq_scal(1_000, alpha, x)
+    JACC.BLAS.scal(1_000, alpha, jx)
+    @test x≈Core.Array(jx) rtol=1e-8 
+
+    seq_axpy(1_000, alpha, x, y)
+    JACC.BLAS.axpy(1_000, alpha, jx, jy)
+    @test x≈Core.Array(jx) atol=1e-8
+
+    r1 = seq_dot(1_000, x, y) 
+    r2 = JACC.BLAS.dot(1_000, jx, jy)
+    @test r1≈r2 atol=1e-8 
+
+    r1 = seq_asum(1_000, x)
+    r2 = JACC.BLAS.asum(1_000, jx)
+    @test r1≈r2 atol=1e-8 
+    r1 = seq_nrm2(1_000, x)
+    r2 = JACC.BLAS.nrm2(1_000, jx)
+    @test r1≈r2 atol=1e-8 
+
+    seq_swap(1_000, x, y1)  
+    JACC.BLAS.swap(1_000, jx, jy1)
+    @test x == Core.Array(jx)
+    @test y1 == Core.Array(jy1)
 end
 
-@testset "Add-2D" begin
+@testitem "Add-2D" setup=[JACCTestItem] begin
     function add!(i, j, A, B, C)
         @inbounds C[i, j] = A[i, j] + B[i, j]
     end
@@ -168,10 +235,10 @@ end
     JACC.parallel_for((M, N), add!, A, B, C)
 
     C_expected = Float32(2.0) .* ones(Float32, M, N)
-    @test Array(C)≈C_expected rtol=1e-5
+    @test Core.Array(C)≈C_expected rtol=1e-5
 end
 
-@testset "Add-3D" begin
+@testitem "Add-3D" setup=[JACCTestItem] begin
     function add!(i, j, k, A, B, C)
         @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
     end
@@ -186,72 +253,10 @@ end
     JACC.parallel_for((L, M, N), add!, A, B, C)
 
     C_expected = Float32(2.0) .* ones(Float32, L, M, N)
-    @test Array(C)≈C_expected rtol=1e-5
-
-    function seq_scal(N, alpha, x)
-        for i in 1:N
-            @inbounds x[i] = alpha * x[i]
-        end
-    end
-
-    function seq_asum(N, x)
-        r = 0.0
-        for i in 1:N
-            @inbounds r += abs(x[i])
-        end
-        return r
-    end
-
-    function seq_nrm2(N, x)
-        sum_sq = 0.0
-        for i in 1:N
-            @inbounds sum_sq += x[i] * x[i]
-        end
-        r = sqrt(sum_sq)
-        return r
-    end
-
-    function seq_swap(N, x, y1)
-        for i in 1:N
-            @inbounds t = x[i]
-            @inbounds x[i] = y1[i]
-            @inbounds y1[i] = t
-        end
-    end
-
-    # Comparing JACC.BLAS with regular seuential functions
-    # seq_axpy(1_000, alpha, x, y)
-    # ref_result = seq_dot(1_000, x, y)  
-    # JACC.BLAS.axpy(1_000, alpha, jx, jy)
-    # jresult = JACC.BLAS.dot(1_000, jx, jy)
-    # result = Array(jresult)        
-    # @test result[1]≈ref_result rtol=1e-8
-
-    # seq_scal(1_000, alpha, x)
-    # JACC.BLAS.scal(1_000, alpha, jx)
-    # @test x≈Array(jx) atol=1e-8 
-
-    # seq_axpy(1_000, alpha, x, y)
-    # JACC.BLAS.axpy(1_000, alpha, jx, jy)
-    # @test x≈Array(jx) atol=1e-8
-
-    # r1 = seq_dot(1_000, x, y) 
-    # r2 = JACC.BLAS.dot(1_000, jx, jy)
-    # @test r1≈Array(r2)[1] atol=1e-8 
-
-    # r1 = seq_asum(1_000, x)
-    # r2 = JACC.BLAS.asum(1_000, jx)
-    # r1 = seq_nrm2(1_000, x)
-    # r2 = JACC.BLAS.nrm2(1_000, jx)
-    # @test r1≈Array(r2)[1] atol=1e-8
-
-    #seq_swap(1_000, x, y1)  
-    #JACC.BLAS.swap(1_000, jx, jy1)
-    #@test x == Array(jx)
-    #@test y1 == Array(jy1)
+    @test Core.Array(C)≈C_expected rtol=1e-5
 end
 
-@testset "CG" begin
+@testitem "CG" setup=[JACCTestItem] begin
     function matvecmul(i, a1, a2, a3, x, y, SIZE)
         if i == 1
             y[i] = a2[i] * x[i] + a1[i] * x[i + 1]
@@ -286,7 +291,7 @@ end
 	global cond = 1.0
 
     while cond[1, 1] >= 1e-14
-        r_old = copy(r)
+        global r_old = copy(r)
 
         JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
 
@@ -303,17 +308,17 @@ end
         beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
         beta = beta0 / beta1
 
-        r_aux = copy(r)
+        global r_aux = copy(r)
 
         JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
         ccond = JACC.parallel_reduce(SIZE, dot, r, r)
         global cond = ccond
-        p = copy(r_aux)
+        global p = copy(r_aux)
     end
     @test cond[1, 1] <= 1e-14
 end
 
-@testset "LBM" begin
+@testitem "LBM" setup=[JACCTestItem] begin
     function lbm_kernel(x, y, f, f1, f2, t, w, cx, cy, SIZE)
         u = 0.0
         v = 0.0
@@ -429,5 +434,5 @@ end
 
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
-    @test f2≈Array(df2) rtol=1e-1
+    @test f2≈Core.Array(df2) rtol=1e-1
 end
