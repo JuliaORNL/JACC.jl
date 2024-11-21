@@ -1,19 +1,18 @@
-using CUDA
-import JACC
-using Test
 
-@testset "TestBackend" begin
+@testitem "TestBackend" tags=[:cuda] begin
     @test JACC.JACCPreferences.backend == "cuda"
 end
 
-@testset "zeros_type" begin
+@testitem "zeros_type" tags=[:cuda] begin
+    using CUDA
     N = 10
     x = JACC.zeros(Float64, N)
     @test typeof(x) == CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}
     @test eltype(x) == Float64
 end
 
-@testset "ones_type" begin
+@testitem "ones_type" tags=[:cuda] begin
+    using CUDA
     N = 10
     x = JACC.ones(Float64, N)
     @test typeof(x) == CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}

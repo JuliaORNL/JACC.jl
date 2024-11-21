@@ -1,7 +1,4 @@
-using oneAPI
-import JACC
-using Test
 
-@testset "TestBackend" begin
+@testitem "TestBackend" tags=[:oneapi] begin
     @test JACC.JACCPreferences.backend == "oneapi"
 end
