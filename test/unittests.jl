@@ -1,8 +1,10 @@
 
-@testitem "VectorAddLambda" setup=[JACCTestItem] begin
+@testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
     end
+
+    alpha = 2.5
 
     N = 10
     dims = (N)
@@ -15,7 +17,7 @@
     @test Core.Array(a_device)≈a_expected rtol=1e-5
 end
 
-@testitem "AXPY" setup=[JACCTestItem] begin
+@testset "AXPY" begin
     function axpy(i, alpha, x, y)
         @inbounds x[i] += alpha * y[i]
     end
@@ -25,6 +27,8 @@ end
             x[i] += alpha * y[i]
         end
     end
+
+    alpha = 2.5
 
     N = 10
     # Generate random vectors x and y of length N for the interval [0, 100]
@@ -42,7 +46,7 @@ end
     @test Core.Array(x_device)≈x_expected rtol=1e-1
 end
 
-@testitem "zeros" setup=[JACCTestItem] begin
+@testset "zeros" begin
     N = 10
     x = JACC.zeros(N)
     @test eltype(x) == FloatType
@@ -56,7 +60,7 @@ end
     @test ones(N)≈Core.Array(x) rtol=1e-5
 end
 
-@testitem "ones" setup=[JACCTestItem] begin
+@testset "ones" begin
     N = 10
     x = JACC.ones(N)
     @test eltype(x) == FloatType
@@ -70,7 +74,7 @@ end
     @test zeros(N)≈Core.Array(x) rtol=1e-5
 end
 
-@testitem "AtomicCounter" setup=[JACCTestItem] begin
+@testset "AtomicCounter" begin
     function axpy_counter!(i, alpha, x, y, counter)
         @inbounds x[i] += alpha * y[i]
         JACC.@atomic counter[1] += 1
@@ -88,7 +92,7 @@ end
     @test Core.Array(counter)[1] == N
 end
 
-@testitem "reduce" setup=[JACCTestItem] begin
+@testset "reduce" begin
     SIZE = 1000
     ah = randn(FloatType, SIZE)
     ad = JACC.Array(ah)
@@ -101,7 +105,7 @@ end
     @test mxd == maximum(ah2)
 end
 
-@testitem "shared" setup=[JACCTestItem] begin
+@testset "shared" begin
     N = 100
     alpha = 2.5
     x = JACC.ones(N)
@@ -122,7 +126,7 @@ end
     @test x≈x_shared rtol=1e-8
 end
 
-@testitem "JACC.BLAS" setup=[JACCTestItem] begin
+@testset "JACC.BLAS" begin
     function seq_axpy(N, alpha, x, y)
         for i in 1:N
             @inbounds x[i] += alpha * y[i]
@@ -221,7 +225,7 @@ end
     @test y1 == Core.Array(jy1)
 end
 
-@testitem "Add-2D" setup=[JACCTestItem] begin
+@testset "Add-2D" begin
     function add!(i, j, A, B, C)
         @inbounds C[i, j] = A[i, j] + B[i, j]
     end
@@ -238,7 +242,7 @@ end
     @test Core.Array(C)≈C_expected rtol=1e-5
 end
 
-@testitem "Add-3D" setup=[JACCTestItem] begin
+@testset "Add-3D" begin
     function add!(i, j, k, A, B, C)
         @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
     end
@@ -256,7 +260,7 @@ end
     @test Core.Array(C)≈C_expected rtol=1e-5
 end
 
-@testitem "CG" setup=[JACCTestItem] begin
+@testset "CG" begin
     function matvecmul(i, a1, a2, a3, x, y, SIZE)
         if i == 1
             y[i] = a2[i] * x[i] + a1[i] * x[i + 1]
@@ -288,10 +292,10 @@ end
     a1 = a1 * 4
     r = r * 0.5
     p = p * 0.5
-	global cond = 1.0
+	cond = 1.0
 
     while cond[1, 1] >= 1e-14
-        global r_old = copy(r)
+        r_old = copy(r)
 
         JACC.parallel_for(SIZE, matvecmul, a0, a1, a2, p, s, SIZE)
 
@@ -308,17 +312,17 @@ end
         beta1 = JACC.parallel_reduce(SIZE, dot, r_old, r_old)
         beta = beta0 / beta1
 
-        global r_aux = copy(r)
+        r_aux = copy(r)
 
         JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
         ccond = JACC.parallel_reduce(SIZE, dot, r, r)
-        global cond = ccond
-        global p = copy(r_aux)
+        cond = ccond
+        p = copy(r_aux)
     end
     @test cond[1, 1] <= 1e-14
 end
 
-@testitem "LBM" setup=[JACCTestItem] begin
+@testset "LBM" begin
     function lbm_kernel(x, y, f, f1, f2, t, w, cx, cy, SIZE)
         u = 0.0
         v = 0.0

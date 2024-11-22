@@ -1,9 +1,9 @@
 
-@testitem "TestBackend" setup=[JACCTestItem] tags=[:cuda] begin
+@testset "TestBackend" begin
     @test JACC.JACCPreferences.backend == "cuda"
 end
 
-@testitem "zeros_type" setup=[JACCTestItem] tags=[:cuda] begin
+@testset "zeros_type" begin
     using CUDA
     N = 10
     x = JACC.zeros(Float64, N)
@@ -11,7 +11,7 @@ end
     @test eltype(x) == Float64
 end
 
-@testitem "ones_type" setup=[JACCTestItem] tags=[:cuda] begin
+@testset "ones_type" begin
     using CUDA
     N = 10
     x = JACC.ones(Float64, N)

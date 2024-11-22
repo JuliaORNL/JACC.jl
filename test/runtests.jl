@@ -25,37 +25,11 @@ elseif backend == "threads"
     @info "Threads backend loaded"
 end
 
-using TestItemRunner
-using TestItems
-
-@testsnippet JACCTestItem begin
-    import JACC
-    const FloatType = JACC.default_float()
-end
-
-using ChangePrecision
-const FloatType = JACC.default_float()
-@changeprecision FloatType begin
-# include("unittests.jl")
-
-backends = [Symbol(x) for x in JACC.JACCPreferences.supported_backends]
-exclude = setdiff(backends, [Symbol(backend)])
+using ReTest
+include("JACCTests.jl")
 
 if isempty(ARGS)
-    @run_package_tests filter = ti -> isempty(intersect(exclude, ti.tags))
+    retest(JACCTests)
 else
-    tagstrs = filter(arg -> startswith(arg, "@"), ARGS)
-    tags = map(t -> Symbol(t[2:end]), tagstrs)
-    function tag_match(ti)
-        !isempty(intersect(tags, ti.tags))
-    end
-
-    names = map(lowercase, setdiff(ARGS, tagstrs))
-    function name_match(ti)
-        findfirst(n -> contains(lowercase(ti.name), n), names) != nothing
-    end
-
-    @run_package_tests verbose = true filter = ti -> (tag_match(ti) || name_match(ti))
+    retest(JACCTests, ARGS)
 end
-
-end # @changeprecision
