@@ -7,6 +7,8 @@ function ones(::ThreadsBackend, T, dims...)
     return Base.ones(T, dims...)
 end
 
-zeros(T, dims...) = zeros(default_backend(), T, dims...)
+zeros(::Type{T}, dims...) where {T} = zeros(default_backend(), T, dims...)
+ones(::Type{T}, dims...) where {T} = ones(default_backend(), T, dims...)
 
-ones(T, dims...) = ones(default_backend(), T, dims...)
+zeros(dims...) = zeros(default_float(), dims...)
+ones(dims...) = ones(default_float(), dims...)

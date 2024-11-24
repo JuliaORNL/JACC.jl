@@ -1,16 +1,16 @@
 
-@testitem "TestBackend" tags=[:threads] begin
+@testset "TestBackend" begin
     @test JACC.JACCPreferences.backend == "threads"
 end
 
-@testitem "zeros_type" tags=[:threads] begin
+@testset "zeros_type" begin
     N = 10
     x = JACC.zeros(Float32, N)
     @test typeof(x) == Vector{Float32}
     @test eltype(x) == Float32
 end
 
-@testitem "ones_type" tags=[:threads] begin
+@testset "ones_type" begin
     N = 10
     x = JACC.ones(Float64, N)
     @test typeof(x) == Vector{Float64}

@@ -1,17 +1,16 @@
-import AMDGPU
 
-@testitem "TestBackend" tags=[:amdgpu] begin
+@testset "TestBackend" begin
     @test JACC.JACCPreferences.backend == "amdgpu"
 end
 
-@testitem "zeros_type" tags=[:amdgpu] begin
+@testset "zeros_type" begin
     N = 10
     x = JACC.zeros(Float64, N)
     @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
     @test eltype(x) == Float64
 end
 
-@testitem "ones_type" tags=[:amdgpu] begin
+@testset "ones_type" begin
     N = 10
     x = JACC.ones(Float64, N)
     @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
