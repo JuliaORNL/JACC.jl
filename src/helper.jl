@@ -1,8 +1,14 @@
 
-macro maybe_threaded(ex)
-    if Threads.nthreads() == 1
-        return esc(ex)
-    else
-        return esc(:(Threads.@threads :static $ex))
+function _maybe_threaded(ex)
+    quote
+        if Threads.nthreads() == 1
+            $ex
+        else
+            Threads.@threads :static $ex
+        end
     end
+end
+
+macro maybe_threaded(ex)
+    esc(_maybe_threaded(ex))
 end
