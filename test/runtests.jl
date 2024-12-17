@@ -5,8 +5,8 @@ using Pkg
 const backend = JACC.JACCPreferences.backend
 
 @static if backend == "cuda"
-    # Pkg.add(; name = "CUDA", version = "v5.1.1")
-    Pkg.add("CUDA")
+    Pkg.add(; name = "CUDA", version = "v5.1.1")
+    # Pkg.add("CUDA")
     @info "CUDA backend loaded"
     using CUDA
 
