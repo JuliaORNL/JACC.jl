@@ -20,6 +20,9 @@ using .BLAS
 include("JACCMULTI.jl")
 using .Multi
 
+include("JACCASYNC.jl")
+using .Async
+
 include("JACCEXPERIMENTAL.jl")
 using .Experimental
 
