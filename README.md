@@ -10,7 +10,7 @@ CPU/GPU performance portable layer for Julia
 JACC.jl follows a function as a argument approach in combination with the power of Julia's ecosystem for multiple dispatch, GPU access via [JuliaGPU back ends](https://juliagpu.org/), and [package extensions](https://julialang.org/blog/2023/04/julia-1.9-highlights/#package_extensions) since Julia v1.9 . Similar to portable layers like Kokkos, users would pass a size and a function including its arguments to a `parallel_for` or `parallel_reduce` function.
 The overall goal is to write a single source code that can be executed on multiple vendor CPU and GPU parallel programming environments. JACC meant to simplify CPU/GPU kernel programming using a simple application programming interface (API).
 
-JuliaCon 2023 presentation [video](https://live.juliacon.org/talk/AY8EUX).
+## Quick start
 
 1. Set a back end: "cuda", "amdgpu", or "threads" (default) with `JACC.JACCPreferences` generating a `LocalPreferences.toml` file
 
@@ -41,15 +41,40 @@ JuliaCon 2023 presentation [video](https://live.juliacon.org/talk/AY8EUX).
     JACC.parallel_for(N, axpy, alpha, x_d, y_d)
     ```
 
-We currently have a limited number of configurations. 
-We hope to study and incoorporate more relevant cases and dimensions shapes as needed.
-For an app integration example see the [GrayScott.jl JACC branch](https://github.com/JuliaORNL/GrayScott.jl/tree/GrayScott-JACC) and the [Simulation.jl](https://github.com/JuliaORNL/GrayScott.jl/blob/GrayScott-JACC/src/simulation/Simulation.jl) for writing kernels with JACC.jl and selecting specific vendor back ends in Julia.
 
+## Resources
+
+- For an app integration example see the [GrayScott.jl JACC branch](https://github.com/JuliaORNL/GrayScott.jl/tree/GrayScott-JACC) and the [Simulation.jl code](https://github.com/JuliaORNL/GrayScott.jl/blob/GrayScott-JACC/src/simulation/Simulation.jl) for writing kernels with JACC.jl and selecting specific vendor back ends in Julia.
+- JuliaCon 2023 presentation [video](https://live.juliacon.org/talk/AY8EUX).
+- SC24 JACC [Best Research Poster Finalist](https://sc24.supercomputing.org/proceedings/poster/poster_pages/post113.html)
+- SC24 WACCPD [presentation](https://sc24.conference-program.com/presentation/?id=ws_waccpd101&sess=sess760) and [paper](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400b955/555400b955.pdf)
+- MiniVATES.jl proxy application [repository](https://github.com/JuliaORNL/MiniVATES.jl) and SC24 XLOOP [best paper using JACC.jl](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400c107/555400c107.pdf)
+
+## Citation
+
+If you find JACC.jl useful please cite the following paper:
+
+```
+@INPROCEEDINGS{JACC,
+  author={Valero-Lara, Pedro and Godoy, William F and Mankad, Het and Teranishi, Keita and Vetter, Jeffrey S and Blaschke, Johannes and Schanen, Michel},
+  booktitle={Proceedings of the SC '24 Workshops of The International Conference on High Performance Computing, Network, Storage, and Analysis}, 
+  title={{JACC: Leveraging HPC Meta-Programming and Performance Portability with the Just-in-Time and LLVM-based Julia Language}}, 
+  year={2024},
+  volume={},
+  number={},
+  pages={},
+  doi={10.1109/SCW63240.2024.00245}
+}
+```
+
+## Sponsors:
 
 Funded by the US Department of Energy Advanced Scientific Computing Research (ASCR) projects:
 
 - S4PST and PESO as part of the Next Generation of Scientific Software Technologies (NGSST)
-- [Bluestone X-Stack](https://csmd.ornl.gov/Bluestone)
+- ASCR Competitive Portfolios for Advanced Scientific Computing Research
 
-Past sponsors:
-- The Exascale Computing Project (ECP) [PROTEAS-TUNE](https://www.ornl.gov/project/proteas-tune) 
+Former sponsors:
+
+- [ASCR Bluestone X-Stack](https://csmd.ornl.gov/Bluestone)
+- The Exascale Computing Project - [PROTEAS-TUNE](https://www.ornl.gov/project/proteas-tune) 
