@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [CUDA12_3-JULIA1_9_4-CUDAJL5_1_1]
+        jobname: [CUDA12_3-JULIA1_11_2-CUDAJL5]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
