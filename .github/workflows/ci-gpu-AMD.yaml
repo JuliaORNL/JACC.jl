@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [ROCM6-JULIA1_10_4-AMDGPU0_8_6]
+        jobname: [ROCM6-JULIA1_10_4-AMDGPU1_1_6]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
