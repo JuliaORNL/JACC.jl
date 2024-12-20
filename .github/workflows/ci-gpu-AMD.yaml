@@ -76,7 +76,6 @@ jobs:
         run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.10.4
-          module load rocm
           julia --project -e 'using Pkg; Pkg.instantiate()'
           julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
 
@@ -85,7 +84,6 @@ jobs:
         run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.10.4
-          module load rocm
           julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Report PR status
