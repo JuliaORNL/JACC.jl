@@ -98,11 +98,15 @@ end
     ad = JACC.Array(ah)
     mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
     @test mxd == maximum(ah)
+    mnd = JACC.parallel_reduce(SIZE, min, (i, a) -> a[i], ad; init = Inf)
+    @test mnd == minimum(ah)
 
     ah2 = randn(FloatType, (SIZE, SIZE))
     ad2 = JACC.Array(ah2)
     mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
+    mnd = JACC.parallel_reduce((SIZE, SIZE), min, (i, j, a) -> a[i, j], ad2; init = Inf)
+    @test mnd == minimum(ah2)
 end
 
 @testset "shared" begin
