@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [ROCM6-JULIA1_10_4-AMDGPU0_8_6]
+        jobname: [ROCM6-JULIA1_10_4-AMDGPU1_1_6]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
@@ -76,7 +76,6 @@ jobs:
         run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.10.4
-          module load rocm
           julia --project -e 'using Pkg; Pkg.instantiate()'
           julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
 
@@ -85,7 +84,6 @@ jobs:
         run: |
           source /etc/profile.d/lmod.sh
           module load julia/1.10.4
-          module load rocm
           julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Report PR status

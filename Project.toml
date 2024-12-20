@@ -22,8 +22,8 @@ JACCCUDA = ["CUDA"]
 JACCONEAPI = ["oneAPI"]
 
 [compat]
-AMDGPU = "0.8"
-Atomix = "0.1"
+AMDGPU = "1.1.6"
+Atomix = "1.0.1"
 CUDA = "5"
 Preferences = "1.4.0"
 julia = "1.9, 1.10, 1.11"

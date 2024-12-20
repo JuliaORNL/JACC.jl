@@ -21,16 +21,15 @@ function _init_backend()
         if backend == "cuda"
             if !haskey(deps, "CUDA")
                 Pkg.add("CUDA")
-                @info "Added CUDA (be careful about committing Project.jl)"
+                @info "Added CUDA (be careful about committing Project.toml)"
             end
             using CUDA
             @info "CUDA backend loaded"
 
         elseif backend == "amdgpu"
             if !haskey(deps, "AMDGPU")
-                Pkg.add(; name = "AMDGPU", version = "v0.8.6")
-                # Pkg.add("AMDGPU")
-                @info "Added AMDGPU (be careful about committing Project.jl)"
+                Pkg.add("AMDGPU")
+                @info "Added AMDGPU (be careful about committing Project.toml)"
             end
             using AMDGPU
             @info "AMDGPU backend loaded"
@@ -38,7 +37,7 @@ function _init_backend()
         elseif backend == "oneapi"
             if !haskey(deps, "oneAPI")
                 Pkg.add("oneAPI")
-                @info "Added oneAPI (be careful about committing Project.jl)"
+                @info "Added oneAPI (be careful about committing Project.toml)"
             end
             using oneAPI
             @info "oneAPI backend loaded"
