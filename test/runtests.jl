@@ -1,27 +1,5 @@
 import JACC
-
-using Pkg
-
-const backend = JACC.JACCPreferences.backend
-
-@static if backend == "cuda"
-    Pkg.add("CUDA")
-    @info "CUDA backend loaded"
-    using CUDA
-
-elseif backend == "amdgpu"
-    Pkg.add("AMDGPU")
-    @info "AMDGPU backend loaded"
-    using AMDGPU
-
-elseif backend == "oneapi"
-    Pkg.add("oneAPI")
-    @info "oneAPI backend loaded"
-    using oneAPI
-
-elseif backend == "threads"
-    @info "Threads backend loaded"
-end
+JACC.@init_backend
 
 using ReTest
 include("JACCTests.jl")
