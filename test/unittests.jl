@@ -93,16 +93,25 @@ end
 end
 
 @testset "reduce" begin
+    a = JACC.Array([1 for i=1:10])
+    alpha = JACC.parallel_reduce(10, (i, a) -> a[i], a)
+    @test alpha == 10
+    @test JACC.parallel_reduce(10, min, (i, a) -> a[i], a; init = 100) == 1
+
     SIZE = 1000
     ah = randn(FloatType, SIZE)
     ad = JACC.Array(ah)
     mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
     @test mxd == maximum(ah)
+    mnd = JACC.parallel_reduce(SIZE, min, (i, a) -> a[i], ad; init = Inf)
+    @test mnd == minimum(ah)
 
     ah2 = randn(FloatType, (SIZE, SIZE))
     ad2 = JACC.Array(ah2)
     mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
+    mnd = JACC.parallel_reduce((SIZE, SIZE), min, (i, j, a) -> a[i, j], ad2; init = Inf)
+    @test mnd == minimum(ah2)
 end
 
 @testset "shared" begin
@@ -317,6 +326,7 @@ end
         JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
         ccond = JACC.parallel_reduce(SIZE, dot, r, r)
         cond = ccond
+
         p = copy(r_aux)
     end
     @test cond[1, 1] <= 1e-14
