@@ -132,12 +132,11 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
     shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     ti = threadIdx().x
-    tmp::eltype(ret) = 0.0
-    shared_mem[ti] = 0.0
+    shared_mem[ti] = ret[blockIdx().x]
 
     if i <= N
         tmp = @inbounds f(i, x...)
-        shared_mem[threadIdx().x] = tmp
+        shared_mem[ti] = tmp
     end
     sync_threads()
     if (ti <= 256)
@@ -183,7 +182,7 @@ function reduce_kernel_cuda(N, op, red, ret)
     shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
     i = threadIdx().x
     ii = i
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     if N > 512
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -242,9 +241,8 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
     bi = blockIdx().x
     bj = blockIdx().y
 
-    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = tmp
+    shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = @inbounds f(i, j, x...)
@@ -292,7 +290,7 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
     ii = i
     jj = j
 
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 

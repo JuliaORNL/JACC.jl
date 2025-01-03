@@ -130,8 +130,7 @@ function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     ti = workitemIdx().x
-    tmp::eltype(ret) = 0.0
-    shared_mem[ti] = 0.0
+    shared_mem[ti] = ret[workgroupIdx().x]
 
     if i <= N
         tmp = @inbounds f(i, x...)
@@ -182,7 +181,7 @@ function reduce_kernel_amdgpu(N, op, red, ret)
     shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
     i = workitemIdx().x
     ii = i
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     if N > 512
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -241,9 +240,8 @@ function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
     bi = workgroupIdx().x
     bj = workgroupIdx().y
 
-    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = tmp
+    shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = @inbounds f(i, j, x...)
@@ -291,7 +289,7 @@ function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
     ii = i
     jj = j
 
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
