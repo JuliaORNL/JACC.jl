@@ -1,4 +1,15 @@
 
+@testset "Array" begin
+    a::JACC.Array{Int,1} = JACC.Array([1,2,3])
+    @test Core.Array(a) == [1,2,3]
+
+    struct A
+        v::JACC.Array{Int, 1}
+    end
+    sa = A([1,2,3])
+    @test Core.Array(sa.v) == [1,2,3]
+end
+
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0

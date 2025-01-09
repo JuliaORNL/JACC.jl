@@ -45,6 +45,10 @@ function _init_backend()
         elseif backend == "threads"
             @info "Threads backend loaded"
         end
+
+        const JACC.Array = JACC.array_type()
+
+        nothing
     end
 end
 

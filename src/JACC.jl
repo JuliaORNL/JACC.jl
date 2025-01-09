@@ -102,15 +102,6 @@ function shared(x::Base.Array{T, N}) where {T, N}
     return x
 end
 
-struct Array{T, N} end
-function (::Type{Array{T, N}})(args...; kwargs...) where {T, N}
-    array_type(){T, N}(args...; kwargs...)
-end
-function (::Type{Array{T}})(args...; kwargs...) where {T}
-    array_type(){T}(args...; kwargs...)
-end
-(::Type{Array})(args...; kwargs...) = array_type()(args...; kwargs...)
-
 array_type() = array_type(default_backend())
 
 default_float() = default_float(default_backend())
