@@ -56,7 +56,7 @@ end
 function JACC.parallel_reduce(
         ::oneAPIBackend, N::Integer, op, f::Function, x...; init)
     numItems = 256
-    items = min(N, numItems)
+    items = numItems
     groups = ceil(Int, N / items)
     ret = oneAPI.zeros(typeof(init), groups)
     rret = oneAPI.zeros(typeof(init), 1)
@@ -70,8 +70,8 @@ end
 function JACC.parallel_reduce(
         ::oneAPIBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numItems = 16
-    Mitems = min(M, numItems)
-    Nitems = min(N, numItems)
+    Mitems = numItems
+    Nitems = numItems
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
     ret = oneAPI.zeros(typeof(init), (Mgroups, Ngroups))

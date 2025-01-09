@@ -68,7 +68,7 @@ end
 function JACC.parallel_reduce(
         ::AMDGPUBackend, N::Integer, op, f::Function, x...; init)
     numThreads = 512
-    threads = min(N, numThreads)
+    threads = numThreads
     blocks = ceil(Int, N / threads)
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
     rret = AMDGPU.ROCArray([init])
@@ -84,8 +84,8 @@ end
 function JACC.parallel_reduce(
         ::AMDGPUBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
+    Mthreads = numThreads
+    Nthreads = numThreads
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
