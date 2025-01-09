@@ -71,13 +71,14 @@ end
 function JACC.parallel_reduce(
         ::CUDABackend, N::Integer, op, f::Function, x...; init)
     numThreads = 512
-    threads = min(N, numThreads)
+    threads = numThreads
     blocks = ceil(Int, N / threads)
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, blocks), init)
     rret = CUDA.CuArray([init])
-    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(typeof(init)) _parallel_reduce_cuda(
+    shmem_size = 512 * sizeof(init)
+    CUDA.@sync @cuda threads=threads blocks=blocks shmem=shmem_size _parallel_reduce_cuda(
         N, op, ret, f, x...)
-    CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(typeof(init)) reduce_kernel_cuda(
+    CUDA.@sync @cuda threads=threads blocks=1 shmem=shmem_size reduce_kernel_cuda(
         blocks, op, ret, rret)
     return Core.Array(rret)[]
 end
@@ -85,18 +86,16 @@ end
 function JACC.parallel_reduce(
         ::CUDABackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
+    Mthreads = numThreads
+    Nthreads = numThreads
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
     rret = CUDA.CuArray([init])
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
-                                                                                  16 *
-                                                                                  sizeof(typeof(init)) _parallel_reduce_cuda_MN(
+    shmem_size = 16 * 16 * sizeof(init)
+    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=shmem_size _parallel_reduce_cuda_MN(
         (M, N), op, ret, f, x...)
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=16 * 16 *
-    sizeof(typeof(init)) reduce_kernel_cuda_MN(
+    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=shmem_size reduce_kernel_cuda_MN(
         (Mblocks, Nblocks), op, ret, rret)
     return Core.Array(rret)[]
 end
