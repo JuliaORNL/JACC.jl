@@ -71,13 +71,14 @@ end
 function JACC.parallel_reduce(
         ::CUDABackend, N::Integer, op, f::Function, x...; init)
     numThreads = 512
-    threads = min(N, numThreads)
+    threads = numThreads
     blocks = ceil(Int, N / threads)
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, blocks), init)
     rret = CUDA.CuArray([init])
-    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(typeof(init)) _parallel_reduce_cuda(
+    shmem_size = 512 * sizeof(init)
+    CUDA.@sync @cuda threads=threads blocks=blocks shmem=shmem_size _parallel_reduce_cuda(
         N, op, ret, f, x...)
-    CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(typeof(init)) reduce_kernel_cuda(
+    CUDA.@sync @cuda threads=threads blocks=1 shmem=shmem_size reduce_kernel_cuda(
         blocks, op, ret, rret)
     return Core.Array(rret)[]
 end
@@ -85,18 +86,16 @@ end
 function JACC.parallel_reduce(
         ::CUDABackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
+    Mthreads = numThreads
+    Nthreads = numThreads
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
     rret = CUDA.CuArray([init])
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
-                                                                                  16 *
-                                                                                  sizeof(typeof(init)) _parallel_reduce_cuda_MN(
+    shmem_size = 16 * 16 * sizeof(init)
+    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=shmem_size _parallel_reduce_cuda_MN(
         (M, N), op, ret, f, x...)
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=16 * 16 *
-    sizeof(typeof(init)) reduce_kernel_cuda_MN(
+    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=shmem_size reduce_kernel_cuda_MN(
         (Mblocks, Nblocks), op, ret, rret)
     return Core.Array(rret)[]
 end
@@ -129,15 +128,14 @@ function _parallel_for_cuda_LMN((L, M, N), f, x...)
 end
 
 function _parallel_reduce_cuda(N, op, ret, f, x...)
-    shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 512)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     ti = threadIdx().x
-    tmp::eltype(ret) = 0.0
-    shared_mem[ti] = 0.0
+    shared_mem[ti] = ret[blockIdx().x]
 
     if i <= N
         tmp = @inbounds f(i, x...)
-        shared_mem[threadIdx().x] = tmp
+        shared_mem[ti] = tmp
     end
     sync_threads()
     if (ti <= 256)
@@ -180,10 +178,10 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
 end
 
 function reduce_kernel_cuda(N, op, red, ret)
-    shared_mem = @cuDynamicSharedMem(eltype(ret), 512)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 512)
     i = threadIdx().x
     ii = i
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     if N > 512
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -234,7 +232,7 @@ function reduce_kernel_cuda(N, op, red, ret)
 end
 
 function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
-    shared_mem = @cuDynamicSharedMem(eltype(ret), 16*16)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 16*16)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     ti = threadIdx().x
@@ -242,9 +240,8 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
     bi = blockIdx().x
     bj = blockIdx().y
 
-    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = tmp
+    shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = @inbounds f(i, j, x...)
@@ -286,13 +283,13 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
 end
 
 function reduce_kernel_cuda_MN((M, N), op, red, ret)
-    shared_mem = @cuDynamicSharedMem(eltype(ret), 16*16)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 16*16)
     i = threadIdx().x
     j = threadIdx().y
     ii = i
     jj = j
 
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
@@ -321,7 +318,6 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
         end
     end
     shared_mem[sid] = tmp
-    red[i, j] = shared_mem[sid]
     sync_threads()
     if (i <= 8 && j <= 8)
         if (i + 8 <= M && j + 8 <= N)
@@ -386,7 +382,7 @@ end
 
 function JACC.shared(x::CuDeviceArray{T, N}) where {T, N}
     size = length(x)
-    shmem = @cuDynamicSharedMem(T, size)
+    shmem = CuDynamicSharedArray(T, size)
     num_threads = blockDim().x * blockDim().y
     if (size <= num_threads)
         if blockDim().y == 1
