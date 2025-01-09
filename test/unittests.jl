@@ -96,6 +96,8 @@ end
     a = JACC.Array([1 for i=1:10])
     @test JACC.parallel_reduce(a) == 10
     @test JACC.parallel_reduce(min, a) == 1
+    a2 = JACC.ones(Int, (2,2))
+    @test JACC.parallel_reduce(min, a2) == 1
 
     SIZE = 1000
     ah = randn(FloatType, SIZE)
