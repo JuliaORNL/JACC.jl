@@ -80,7 +80,7 @@ function JACC.parallel_reduce(
         N, op, ret, f, x...)
     CUDA.@sync @cuda threads=threads blocks=1 shmem=shmem_size reduce_kernel_cuda(
         blocks, op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function JACC.parallel_reduce(
@@ -97,7 +97,7 @@ function JACC.parallel_reduce(
         (M, N), op, ret, f, x...)
     CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=shmem_size reduce_kernel_cuda_MN(
         (Mblocks, Nblocks), op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function _parallel_for_cuda(N, f, x...)
@@ -432,6 +432,8 @@ function JACC.shared(x::CuDeviceArray{T, N}) where {T, N}
     return shmem
 end
 
-JACC.array_type(::CUDABackend) = CUDA.CuArray{T, N} where {T, N}
+JACC.array_type(::CUDABackend) = CUDA.CuArray
+
+JACC.array(::CUDABackend, x::Base.Array) = CUDA.CuArray(x)
 
 end # module JACCCUDA

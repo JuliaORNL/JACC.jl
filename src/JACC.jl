@@ -28,11 +28,11 @@ using .Experimental
 
 get_backend(::Val{:threads}) = ThreadsBackend()
 
-export Array, @atomic
-export parallel_for
-export parallel_reduce
-
-global Array
+export array_type, array
+export default_float
+export @atomic
+export parallel_for, parallel_reduce
+export shared
 
 function parallel_for(
         ::ThreadsBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
@@ -94,7 +94,9 @@ function parallel_reduce(
     return ret
 end
 
-array_type(::ThreadsBackend) = Base.Array{T, N} where {T, N}
+array_type(::ThreadsBackend) = Base.Array
+
+array(::ThreadsBackend, x::Base.Array) = x
 
 default_float(::Any) = Float64
 
@@ -102,16 +104,9 @@ function shared(x::Base.Array{T, N}) where {T, N}
     return x
 end
 
-struct Array{T, N} end
-function (::Type{Array{T, N}})(args...; kwargs...) where {T, N}
-    array_type(){T, N}(args...; kwargs...)
-end
-function (::Type{Array{T}})(args...; kwargs...) where {T}
-    array_type(){T}(args...; kwargs...)
-end
-(::Type{Array})(args...; kwargs...) = array_type()(args...; kwargs...)
-
 array_type() = array_type(default_backend())
+
+array(x::Base.Array) = array(default_backend(), x)
 
 default_float() = default_float(default_backend())
 
