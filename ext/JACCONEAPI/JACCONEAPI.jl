@@ -64,7 +64,7 @@ function JACC.parallel_reduce(
         N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
         N, op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function JACC.parallel_reduce(
@@ -80,7 +80,7 @@ function JACC.parallel_reduce(
         (M, N), op, ret, f, x...)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
         (Mgroups, Ngroups), op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function _parallel_for_oneapi(N, f, x...)
@@ -402,7 +402,9 @@ function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
     return shmem
 end
 
-JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
+JACC.array_type(::oneAPIBackend) = oneAPI.oneArray
+
+JACC.array(::oneAPIBackend, x::Base.Array) = oneAPI.oneArray(x)
 
 DefaultFloat = Union{Type, Nothing}
 

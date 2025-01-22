@@ -78,7 +78,7 @@ function JACC.parallel_reduce(
     @roc groupsize=threads gridsize=1 reduce_kernel_amdgpu(
         blocks, op, ret, rret)
     AMDGPU.synchronize()
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function JACC.parallel_reduce(
@@ -96,7 +96,7 @@ function JACC.parallel_reduce(
     @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) reduce_kernel_amdgpu_MN(
         (Mblocks, Nblocks), op, ret, rret)
     AMDGPU.synchronize()
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function _parallel_for_amdgpu(N, f, x...)
@@ -426,6 +426,8 @@ function JACC.shared(x::ROCDeviceArray{T, N}) where {T, N}
     return shmem
 end
 
-JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray{T, N} where {T, N}
+JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray
+
+JACC.array(::AMDGPUBackend, x::Base.Array) = AMDGPU.ROCArray(x)
 
 end # module JACCAMDGPU
