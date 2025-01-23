@@ -68,7 +68,7 @@ end
 function JACC.parallel_reduce(
         ::AMDGPUBackend, N::Integer, op, f::Function, x...; init)
     numThreads = 512
-    threads = min(N, numThreads)
+    threads = numThreads
     blocks = ceil(Int, N / threads)
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
     rret = AMDGPU.ROCArray([init])
@@ -78,14 +78,14 @@ function JACC.parallel_reduce(
     @roc groupsize=threads gridsize=1 reduce_kernel_amdgpu(
         blocks, op, ret, rret)
     AMDGPU.synchronize()
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function JACC.parallel_reduce(
         ::AMDGPUBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
+    Mthreads = numThreads
+    Nthreads = numThreads
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
@@ -96,7 +96,7 @@ function JACC.parallel_reduce(
     @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) reduce_kernel_amdgpu_MN(
         (Mblocks, Nblocks), op, ret, rret)
     AMDGPU.synchronize()
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function _parallel_for_amdgpu(N, f, x...)
@@ -130,8 +130,7 @@ function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     ti = workitemIdx().x
-    tmp::eltype(ret) = 0.0
-    shared_mem[ti] = 0.0
+    shared_mem[ti] = ret[workgroupIdx().x]
 
     if i <= N
         tmp = @inbounds f(i, x...)
@@ -182,7 +181,7 @@ function reduce_kernel_amdgpu(N, op, red, ret)
     shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
     i = workitemIdx().x
     ii = i
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     if N > 512
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -241,9 +240,8 @@ function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
     bi = workgroupIdx().x
     bj = workgroupIdx().y
 
-    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = tmp
+    shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = @inbounds f(i, j, x...)
@@ -291,7 +289,7 @@ function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
     ii = i
     jj = j
 
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
@@ -428,6 +426,8 @@ function JACC.shared(x::ROCDeviceArray{T, N}) where {T, N}
     return shmem
 end
 
-JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray{T, N} where {T, N}
+JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray
+
+JACC.array(::AMDGPUBackend, x::Base.Array) = AMDGPU.ROCArray(x)
 
 end # module JACCAMDGPU

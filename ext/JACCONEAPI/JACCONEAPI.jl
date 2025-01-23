@@ -56,7 +56,7 @@ end
 function JACC.parallel_reduce(
         ::oneAPIBackend, N::Integer, op, f::Function, x...; init)
     numItems = 256
-    items = min(N, numItems)
+    items = numItems
     groups = ceil(Int, N / items)
     ret = oneAPI.zeros(typeof(init), groups)
     rret = oneAPI.zeros(typeof(init), 1)
@@ -64,14 +64,14 @@ function JACC.parallel_reduce(
         N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
         N, op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function JACC.parallel_reduce(
         ::oneAPIBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
     numItems = 16
-    Mitems = min(M, numItems)
-    Nitems = min(N, numItems)
+    Mitems = numItems
+    Nitems = numItems
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
     ret = oneAPI.zeros(typeof(init), (Mgroups, Ngroups))
@@ -80,7 +80,7 @@ function JACC.parallel_reduce(
         (M, N), op, ret, f, x...)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
         (Mgroups, Ngroups), op, ret, rret)
-    return Core.Array(rret)[]
+    return Base.Array(rret)[]
 end
 
 function _parallel_for_oneapi(N, f, x...)
@@ -114,8 +114,7 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
     shared_mem = oneLocalArray(eltype(ret), 256)
     i = get_global_id(0)
     ti = get_local_id(0)
-    tmp::eltype(ret) = 0.0
-    shared_mem[ti] = 0.0
+    shared_mem[ti] = ret[get_group_id(0)]
     if i <= N
         tmp = @inbounds f(i, x...)
         shared_mem[ti] = tmp
@@ -161,7 +160,7 @@ function reduce_kernel_oneapi(N, op, red, ret)
     shared_mem = oneLocalArray(eltype(ret), 256)
     i = get_global_id()
     ii = i
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     if N > 256
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
@@ -216,9 +215,8 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
     bi = get_group_id(0)
     bj = get_group_id(1)
 
-    tmp::eltype(ret) = 0.0
     sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = tmp
+    shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = @inbounds f(i, j, x...)
@@ -266,7 +264,7 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     ii = i
     jj = j
 
-    tmp::eltype(ret) = 0.0
+    tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
@@ -404,7 +402,9 @@ function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
     return shmem
 end
 
-JACC.array_type(::oneAPIBackend) = oneAPI.oneArray{T, N} where {T, N}
+JACC.array_type(::oneAPIBackend) = oneAPI.oneArray
+
+JACC.array(::oneAPIBackend, x::Base.Array) = oneAPI.oneArray(x)
 
 DefaultFloat = Union{Type, Nothing}
 

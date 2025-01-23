@@ -9,12 +9,12 @@
     N = 10
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
+    a_expected = a .+ 5.0
 
-    a_device = JACC.Array(a)
+    a_device = JACC.array(a)
     JACC.parallel_for(N, f, a_device)
 
-    a_expected = a .+ 5.0
-    @test Core.Array(a_device)≈a_expected rtol=1e-5
+    @test Base.Array(a_device)≈a_expected rtol=1e-5
 end
 
 @testset "AXPY" begin
@@ -36,42 +36,42 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_device = JACC.Array(x)
-    y_device = JACC.Array(y)
+    x_device = JACC.array(x)
+    y_device = JACC.array(y)
     JACC.parallel_for(N, axpy, alpha, x_device, y_device)
 
     x_expected = x
     seq_axpy(N, alpha, x_expected, y)
 
-    @test Core.Array(x_device)≈x_expected rtol=1e-1
+    @test Base.Array(x_device)≈x_expected rtol=1e-1
 end
 
 @testset "zeros" begin
     N = 10
     x = JACC.zeros(N)
     @test eltype(x) == FloatType
-    @test zeros(N)≈Core.Array(x) rtol=1e-5
+    @test zeros(N)≈Base.Array(x) rtol=1e-5
 
     function add_one(i, x)
         @inbounds x[i] += 1
     end
 
     JACC.parallel_for(N, add_one, x)
-    @test ones(N)≈Core.Array(x) rtol=1e-5
+    @test ones(N)≈Base.Array(x) rtol=1e-5
 end
 
 @testset "ones" begin
     N = 10
     x = JACC.ones(N)
     @test eltype(x) == FloatType
-    @test ones(N)≈Core.Array(x) rtol=1e-5
+    @test ones(N)≈Base.Array(x) rtol=1e-5
 
     function minus_one(i, x)
         @inbounds x[i] -= 1
     end
 
     JACC.parallel_for(N, minus_one, x)
-    @test zeros(N)≈Core.Array(x) rtol=1e-5
+    @test zeros(N)≈Base.Array(x) rtol=1e-5
 end
 
 @testset "AtomicCounter" begin
@@ -84,33 +84,42 @@ end
     # Generate random vectors x and y of length N for the interval [0, 100]
     alpha = 2.5
 
-    x = JACC.Array(round.(rand(Float32, N) * 100))
-    y = JACC.Array(round.(rand(Float32, N) * 100))
-    counter = JACC.Array{Int32}([0])
+    x = JACC.array(round.(rand(Float32, N) * 100))
+    y = JACC.array(round.(rand(Float32, N) * 100))
+    counter = JACC.array(Int32[0])
     JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
 
-    @test Core.Array(counter)[1] == N
+    @test Base.Array(counter)[1] == N
 end
 
 @testset "reduce" begin
-    a = JACC.Array([1 for i=1:10])
-    alpha = JACC.parallel_reduce(10, (i, a) -> a[i], a)
-    @test alpha == 10
-    @test JACC.parallel_reduce(10, min, (i, a) -> a[i], a; init = 100) == 1
+    a = JACC.array([1 for i=1:10])
+    @test JACC.parallel_reduce(a) == 10
+    @test JACC.parallel_reduce(min, a) == 1
+    a2 = JACC.ones(Int, (2,2))
+    @test JACC.parallel_reduce(min, a2) == 1
 
     SIZE = 1000
     ah = randn(FloatType, SIZE)
-    ad = JACC.Array(ah)
+    ad = JACC.array(ah)
     mxd = JACC.parallel_reduce(SIZE, max, (i, a) -> a[i], ad; init = -Inf)
+    @test mxd == maximum(ah)
+    mxd = JACC.parallel_reduce(max, ad)
     @test mxd == maximum(ah)
     mnd = JACC.parallel_reduce(SIZE, min, (i, a) -> a[i], ad; init = Inf)
     @test mnd == minimum(ah)
+    mnd = JACC.parallel_reduce(min, ad)
+    @test mnd == minimum(ah)
 
     ah2 = randn(FloatType, (SIZE, SIZE))
-    ad2 = JACC.Array(ah2)
+    ad2 = JACC.array(ah2)
     mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
+    mxd = JACC.parallel_reduce(max, ad2)
+    @test mxd == maximum(ah2)
     mnd = JACC.parallel_reduce((SIZE, SIZE), min, (i, j, a) -> a[i, j], ad2; init = Inf)
+    @test mnd == minimum(ah2)
+    mnd = JACC.parallel_reduce(min, ad2)
     @test mnd == minimum(ah2)
 end
 
@@ -211,11 +220,11 @@ end
 
     seq_scal(1_000, alpha, x)
     JACC.BLAS.scal(1_000, alpha, jx)
-    @test x≈Core.Array(jx) rtol=1e-8 
+    @test x≈Base.Array(jx) rtol=1e-8 
 
     seq_axpy(1_000, alpha, x, y)
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
-    @test x≈Core.Array(jx) atol=1e-8
+    @test x≈Base.Array(jx) atol=1e-8
 
     r1 = seq_dot(1_000, x, y) 
     r2 = JACC.BLAS.dot(1_000, jx, jy)
@@ -230,8 +239,8 @@ end
 
     seq_swap(1_000, x, y1)  
     JACC.BLAS.swap(1_000, jx, jy1)
-    @test x == Core.Array(jx)
-    @test y1 == Core.Array(jy1)
+    @test x == Base.Array(jx)
+    @test y1 == Base.Array(jy1)
 end
 
 @testset "Add-2D" begin
@@ -248,7 +257,7 @@ end
     JACC.parallel_for((M, N), add!, A, B, C)
 
     C_expected = Float32(2.0) .* ones(Float32, M, N)
-    @test Core.Array(C)≈C_expected rtol=1e-5
+    @test Base.Array(C)≈C_expected rtol=1e-5
 end
 
 @testset "Add-3D" begin
@@ -266,7 +275,7 @@ end
     JACC.parallel_for((L, M, N), add!, A, B, C)
 
     C_expected = Float32(2.0) .* ones(Float32, L, M, N)
-    @test Core.Array(C)≈C_expected rtol=1e-5
+    @test Base.Array(C)≈C_expected rtol=1e-5
 end
 
 @testset "CG" begin
@@ -436,17 +445,17 @@ end
     w = ones(9)
     t = 1.0
 
-    df = JACC.Array(f)
-    df1 = JACC.Array(f1)
-    df2 = JACC.Array(f2)
-    dcx = JACC.Array(cx)
-    dcy = JACC.Array(cy)
-    dw = JACC.Array(w)
+    df = JACC.array(f)
+    df1 = JACC.array(f1)
+    df2 = JACC.array(f2)
+    dcx = JACC.array(cx)
+    dcy = JACC.array(cy)
+    dw = JACC.array(w)
 
     JACC.parallel_for(
         (SIZE, SIZE), lbm_kernel, df, df1, df2, t, dw, dcx, dcy, SIZE)
 
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
-    @test f2≈Core.Array(df2) rtol=1e-1
+    @test f2≈Base.Array(df2) rtol=1e-1
 end
