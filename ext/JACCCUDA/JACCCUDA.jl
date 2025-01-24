@@ -88,10 +88,7 @@ function JACC.parallel_for(
         ceil(Int, maxThreads / x_thr),
     )
     threads = (x_thr, y_thr)
-    blocks = (
-        ceil(Int, (m - 1) / x_thr + 1),
-        ceil(Int, (n - 1) / y_thr + 1),
-    )
+    blocks = (cld(m, x_thr), cld(n, y_thr))
 
     shmem_size = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
 
