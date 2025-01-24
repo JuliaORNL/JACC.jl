@@ -18,30 +18,70 @@ JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
 
 function JACC.parallel_for(
         ::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
-    numThreads = 512
-    threads = min(N, numThreads)
-    blocks = ceil(Int, N / threads)
-    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
+    kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
+    config = AMDGPU.launch_configuration(kernel)
+    threads = min(N, config.groupsize)
+    blocks = cld(N, threads)
     shmem_size = 2 * threads * sizeof(Float64)
-    @roc groupsize=threads gridsize=blocks shmem=shmem_size _parallel_for_amdgpu(
-        N, f, x...)
+    kernel(N, f, x...; groupsize=threads, gridsize=blocks, shmem=shmem_size)
     AMDGPU.synchronize()
+end
+
+abstract type BlockIndexer2D end
+
+struct BlockIndexerBasic <: BlockIndexer2D end
+
+function (blkIter::BlockIndexerBasic)(blockIdx, blockDim, threadIdx)
+    j = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    i = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    return (i, j)
+end
+
+struct BlockIndexerSwapped <: BlockIndexer2D end
+
+function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
+    j = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    i = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+    return (i, j)
 end
 
 function JACC.parallel_for(
         ::AMDGPUBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
         I <: Integer, F <: Function}
-    numThreads = 16
-    Mthreads = min(M, numThreads)
-    Nthreads = min(N, numThreads)
-    Mblocks = ceil(Int, M / Mthreads)
-    Nblocks = ceil(Int, N / Nthreads)
-    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
-    shmem_size = 2 * Mthreads * Nthreads * sizeof(Float64)
-    @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) shmem=shmem_size _parallel_for_amdgpu_MN(
-        (M, N), f, x...)
+    dev = AMDGPU.device()
+    props = AMDGPU.HIP.properties(dev)
+    maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
+    indexer = BlockIndexerBasic()
+    m, n = (M, N)
+    if M < N && maxBlocks.x > maxBlocks.y
+        indexer = BlockIndexerSwapped()
+        m, n = (N, M)
+    end
+
+    kernel = @roc launch=false _parallel_for_amdgpu_MN(indexer, (M, N), f, x...)
+    config = AMDGPU.launch_configuration(kernel)
+    maxThreads = config.groupsize
+    blockAttrs = (
+        max_x = props.maxThreadsDim[1],
+        max_y = props.maxThreadsDim[2],
+        total = props.maxThreadsPerBlock,
+    )
+    x_thr = min(
+        blockAttrs.max_x,
+        nextpow(2, m / blockAttrs.total + 1),
+        blockAttrs.total,
+        maxThreads
+    )
+    y_thr = min(
+        blockAttrs.max_y,
+        cld(blockAttrs.total, x_thr),
+        cld(maxThreads, x_thr)
+    )
+    threads = (x_thr, y_thr)
+    blocks = (cld(m, x_thr), cld(n, y_thr))
+
+    shmem_size = 2 * x_thr * y_thr * sizeof(Float64)
+    kernel(indexer, (M, N), f, x...; groupsize=threads, gridsize=blocks, shmem=shmem_size)
     AMDGPU.synchronize()
 end
 
@@ -106,9 +146,8 @@ function _parallel_for_amdgpu(N, f, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_MN((M, N), f, x...)
-    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
-    j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
+function _parallel_for_amdgpu_MN(indexer::BlockIndexer2D, (M, N), f, x...)
+    i, j = indexer(workgroupIdx, workgroupDim, workitemIdx)
     i > M && return nothing
     j > N && return nothing
     f(i, j, x...)
