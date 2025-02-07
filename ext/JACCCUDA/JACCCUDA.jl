@@ -14,6 +14,12 @@ using .Experimental
 
 JACC.get_backend(::Val{:cuda}) = CUDABackend()
 
+default_stream() = CUDA.stream()
+
+function JACC.synchronize(::CUDABackend; stream = default_stream())
+    CUDA.synchronize(stream)
+end
+
 @inline kernel_args(args...) = cudaconvert.((args))
 
 @inline function kernel_maxthreads(kernel_function, kargs)
@@ -24,14 +30,25 @@ JACC.get_backend(::Val{:cuda}) = CUDABackend()
 end
 
 function JACC.parallel_for(
-        ::CUDABackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
+        ::CUDABackend, N::Integer, f::Function, x...; threads = nothing,
+        blocks = nothing, shmem_size = nothing, stream = default_stream(), sync = false)
     kargs = kernel_args(N, f, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda, kargs)
-    threads = min(N, maxThreads)
-    blocks = ceil(Int, N / threads)
-    shmem_size = attribute(
-        device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    kernel(kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
+    if threads == nothing
+        threads = min(N, maxThreads)
+    end
+    if blocks == nothing
+        blocks = ceil(Int, N / threads)
+    end
+    if shmem_size == nothing
+        shmem_size = attribute(
+            device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    end
+    kernel(kargs...; threads = threads, blocks = blocks,
+        shmem = shmem_size, stream = stream)
+    if sync
+        CUDA.synchronize(stream)
+    end
 end
 
 abstract type BlockIndexer2D end
@@ -53,66 +70,83 @@ function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
 end
 
 function JACC.parallel_for(
-        ::CUDABackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
-    #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
-    # potential benefit from using shared memory.
-
-    dev = CUDA.device()
-    maxBlocks = (
-        x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
-        y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y),
-    )
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
-    if M < N && maxBlocks.x > maxBlocks.y
-        indexer = BlockIndexerSwapped()
-        m, n = (N, M)
-    end
-
+        ::CUDABackend, (M, N)::NTuple{2, Integer}, f::Function, x...; threads = nothing,
+        blocks = nothing, shmem_size = nothing, stream = default_stream(), sync = false)
     kargs = kernel_args(indexer, (M, N), f, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda_MN, kargs)
-    blockAttrs = (
-        max_x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
-        max_y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
-        total = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK))
-    x_thr = min(
-        blockAttrs.max_x,
-        nextpow(2, m / blockAttrs.total + 1),
-        blockAttrs.total,
-        maxThreads
-    )
-    y_thr = min(
-        blockAttrs.max_y,
-        ceil(Int, blockAttrs.total / x_thr),
-        ceil(Int, maxThreads / x_thr),
-    )
-    threads = (x_thr, y_thr)
-    blocks = (cld(m, x_thr), cld(n, y_thr))
 
-    shmem_size = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    dev = CUDA.device()
+    indexer = BlockIndexerBasic()
+    m, n = (M, N)
+    if threads == nothing
+        maxBlocks = (
+            x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
+            y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y)
+        )
+        if M < N && maxBlocks.x > maxBlocks.y
+            indexer = BlockIndexerSwapped()
+            m, n = (N, M)
+        end
+        blockAttrs = (
+            max_x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
+            max_y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
+            total = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK))
+        x_thr = min(
+            blockAttrs.max_x,
+            nextpow(2, m / blockAttrs.total + 1),
+            blockAttrs.total,
+            maxThreads
+        )
+        y_thr = min(
+            blockAttrs.max_y,
+            ceil(Int, blockAttrs.total / x_thr),
+            ceil(Int, maxThreads / x_thr)
+        )
+        threads = (x_thr, y_thr)
+    end
 
-    kernel(kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
+    if blocks == nothing
+        blocks = (cld(m, x_thr), cld(n, y_thr))
+    end
+
+    if shmem_size == nothing
+        shmem_size = attribute(
+            dev, CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    end
+
+    kernel(kargs...; threads = threads, blocks = blocks,
+        shmem = shmem_size, stream = stream)
+    if sync
+        CUDA.synchronize(stream)
+    end
 end
 
 function JACC.parallel_for(
-        ::CUDABackend, (L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {
-        I <: Integer, F <: Function}
-    #To use JACC.shared, it is recommended to use a high number of threads per block to maximize the
-    # potential benefit from using shared memory.
-    numThreads = 32
-    Lthreads = min(L, numThreads)
-    Mthreads = min(M, numThreads)
-    Nthreads = 1
-    Lblocks = ceil(Int, L / Lthreads)
-    Mblocks = ceil(Int, M / Mthreads)
-    Nblocks = ceil(Int, N / Nthreads)
-    shmem_size = attribute(
-        device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    CUDA.@sync @cuda threads=(Lthreads, Mthreads, Nthreads) blocks=(
-        Lblocks, Mblocks, Nblocks) shmem=shmem_size _parallel_for_cuda_LMN(
+        ::CUDABackend, (L, M, N)::NTuple{3, Integer}, f::Function,
+        x...; sync = false; threads = nothing,
+        blocks = nothing, shmem_size = nothing, stream = default_stream(), sync = false)
+    if threads == nothing
+        numThreads = 32
+        Lthreads = min(L, numThreads)
+        Mthreads = min(M, numThreads)
+        Nthreads = 1
+        threads = (Lthreads, Mthreads, Nthreads)
+    end
+    if blocks == nothing
+        Lblocks = ceil(Int, L / Lthreads)
+        Mblocks = ceil(Int, M / Mthreads)
+        Nblocks = ceil(Int, N / Nthreads)
+        blocks = (Lblocks, Mblocks, Nblocks)
+    end
+    if shmem_size == nothing
+        shmem_size = attribute(
+            device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    end
+    @cuda threads=threads blocks=blocks shmem=shmem_size stream=stream _parallel_for_cuda_LMN(
         (L, M, N), f, x...)
+    if sync
+        CUDA.synchronize(stream)
+    end
 end
 
 function JACC.parallel_reduce(
@@ -249,7 +283,7 @@ function reduce_kernel_cuda(N, op, red, ret)
 end
 
 function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
-    shared_mem = CuDynamicSharedArray(eltype(ret), 16*16)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 16 * 16)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     ti = threadIdx().x
@@ -300,7 +334,7 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
 end
 
 function reduce_kernel_cuda_MN((M, N), op, red, ret)
-    shared_mem = CuDynamicSharedArray(eltype(ret), 16*16)
+    shared_mem = CuDynamicSharedArray(eltype(ret), 16 * 16)
     i = threadIdx().x
     j = threadIdx().y
     ii = i

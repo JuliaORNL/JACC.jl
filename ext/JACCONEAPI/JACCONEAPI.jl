@@ -11,46 +11,73 @@ using .Experimental
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
 
+default_stream() = oneAPI.global_queue(oneAPI.context(), oneAPI.device())
+
+function JACC.synchronize(::oneAPIBackend; stream = default_stream())
+    oneAPI.synchronize(stream)
+end
+
 function JACC.parallel_for(
-        ::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
-    #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
-    maxPossibleItems = 256
-    items = min(N, maxPossibleItems)
-    groups = ceil(Int, N / items)
-    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    # We must know how to get the max shared memory to be used in oneAPI as it is done in CUDA
-    #shmem_size = 2 * threads * sizeof(Float64)
-    #oneAPI.@sync @oneapi items = items groups = groups shmem = shmem_size _parallel_for_oneapi(f, x...)
-    oneAPI.@sync @oneapi items=items groups=groups _parallel_for_oneapi(
+        ::oneAPIBackend, N::Integer, f::Function, x...; threads = nothing,
+        blocks = nothing, stream = default_stream(), sync = false)
+    if threads == nothing
+        maxPossibleItems = 256
+        threads = min(N, maxPossibleItems)
+    end
+    if blocks == nothing
+        blocks = ceil(Int, N / threads)
+    end
+    @oneapi items=threads groups=blocks queue=stream _parallel_for_oneapi(
         N, f, x...)
+    if sync
+        oneAPI.synchronize(stream)
+    end
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
-    maxPossibleItems = 16
-    Mitems = min(M, maxPossibleItems)
-    Nitems = min(N, maxPossibleItems)
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN(
-        (M, N),
-        f, x...)
+        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, f::Function, x...; threads = nothing,
+        blocks = nothing, stream = default_stream(), sync = false)
+    if threads == nothing
+        maxPossibleItems = 16
+        Mitems = min(M, maxPossibleItems)
+        Nitems = min(N, maxPossibleItems)
+        threads = (Mitems, Nitems)
+    end
+    if blocks == nothing
+        Mgroups = ceil(Int, M / Mitems)
+        Ngroups = ceil(Int, N / Nitems)
+        blocks = (Mgroups, Ngroups)
+    end
+    @oneapi items=threads groups=blocks queue=stream _parallel_for_oneapi_MN(
+        (M, N), f, x...)
+    if sync
+        oneAPI.synchronize(stream)
+    end
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
-    maxPossibleItems = 16
-    Litems = min(M, maxPossibleItems)
-    Mitems = min(M, maxPossibleItems)
-    Nitems = 1
-    Lgroups = ceil(Int, L / Litems)
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
-    oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
-        Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L, M, N),
+        ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, f::Function,
+        x...; threads = nothing,
+        blocks = nothing, stream = default_stream(), sync = false)
+    if threads == nothing
+        maxPossibleItems = 16
+        Litems = min(M, maxPossibleItems)
+        Mitems = min(M, maxPossibleItems)
+        Nitems = 1
+        threads = (Litems, Mitems, Nitems)
+    end
+    if blocks == nothing
+        Lgroups = ceil(Int, L / Litems)
+        Mgroups = ceil(Int, M / Mitems)
+        Ngroups = ceil(Int, N / Nitems)
+        blocks = (Lgroups, Mgroups, Ngroups)
+    end
+    @oneapi items=threads groups=blocks queue=stream _parallel_for_oneapi_LMN(
+        (L, M, N),
         f, x...)
+    if sync
+        oneAPI.synchronize(stream)
+    end
 end
 
 function JACC.parallel_reduce(
@@ -410,7 +437,8 @@ JACC.array(::oneAPIBackend, x::Base.Array) = oneAPI.oneArray(x)
 DefaultFloat = Union{Type, Nothing}
 
 function _get_default_float()
-    if oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
+    if oneL0.module_properties(device()).fp64flags &
+       oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
         return Float64
     else
         @info """Float64 unsupported on the current device.
