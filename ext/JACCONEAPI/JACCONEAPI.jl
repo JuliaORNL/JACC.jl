@@ -58,12 +58,12 @@ function JACC.parallel_reduce(
     numItems = 256
     items = numItems
     groups = ceil(Int, N / items)
-    ret = oneAPI.zeros(typeof(init), groups)
-    rret = oneAPI.zeros(typeof(init), 1)
+    ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
+    rret = oneAPI.oneArray([init])
     oneAPI.@sync @oneapi items=items groups=groups _parallel_reduce_oneapi(
         N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
-        N, op, ret, rret)
+        groups, op, ret, rret)
     return Base.Array(rret)[]
 end
 
@@ -74,8 +74,8 @@ function JACC.parallel_reduce(
     Nitems = numItems
     Mgroups = ceil(Int, M / Mitems)
     Ngroups = ceil(Int, N / Nitems)
-    ret = oneAPI.zeros(typeof(init), (Mgroups, Ngroups))
-    rret = oneAPI.zeros(typeof(init), 1)
+    ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
+    rret = oneAPI.oneArray([init])
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
@@ -115,6 +115,7 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
     i = get_global_id(0)
     ti = get_local_id(0)
     shared_mem[ti] = ret[get_group_id(0)]
+
     if i <= N
         tmp = @inbounds f(i, x...)
         shared_mem[ti] = tmp
@@ -158,7 +159,7 @@ end
 
 function reduce_kernel_oneapi(N, op, red, ret)
     shared_mem = oneLocalArray(eltype(ret), 256)
-    i = get_global_id()
+    i = get_global_id(0)
     ii = i
     tmp = ret[1]
     if N > 256
