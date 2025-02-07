@@ -335,6 +335,7 @@ end
         JACC.parallel_for(SIZE, axpy, beta, r_aux, p)
         ccond = JACC.parallel_reduce(SIZE, dot, r, r)
         cond = ccond
+
         p = copy(r_aux)
     end
     @test cond[1, 1] <= 1e-14
