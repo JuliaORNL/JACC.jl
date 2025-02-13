@@ -11,23 +11,40 @@ using .Experimental
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
 
-function JACC.parallel_for(
-        ::oneAPIBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
-    #maxPossibleItems = oneAPI.oneL0.compute_properties(device().maxTotalGroupSize)
+default_stream() = oneAPI.global_queue(oneAPI.context(), oneAPI.device())
+
+JACC.default_stream(::Type{oneAPIBackend}) = default_stream()
+
+function JACC.synchronize(::oneAPIBackend; stream = default_stream())
+    oneAPI.synchronize(stream)
+end
+
+function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Function, x...)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
     groups = ceil(Int, N / items)
-    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    # We must know how to get the max shared memory to be used in oneAPI as it is done in CUDA
-    #shmem_size = 2 * threads * sizeof(Float64)
-    #oneAPI.@sync @oneapi items = items groups = groups shmem = shmem_size _parallel_for_oneapi(f, x...)
     oneAPI.@sync @oneapi items=items groups=groups _parallel_for_oneapi(
         N, f, x...)
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
+        spec::LaunchSpec{oneAPIBackend}, N::Integer, f::Function, x...)
+    if spec.threads == 0
+        maxPossibleItems = 256
+        spec.threads = min(N, maxPossibleItems)
+    end
+    if spec.blocks == 0
+        spec.blocks = ceil(Int, N / spec.threads)
+    end
+    @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi(
+        N, f, x...)
+    if spec.sync
+        oneAPI.synchronize(spec.stream)
+    end
+end
+
+function JACC.parallel_for(
+        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, f::Function, x...)
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
@@ -39,10 +56,30 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::Tuple{I, I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
+        spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, f::Function, x...)
+    if spec.threads == 0
+        maxPossibleItems = 16
+        Mitems = min(M, maxPossibleItems)
+        Nitems = min(N, maxPossibleItems)
+        spec.threads = (Mitems, Nitems)
+    end
+    if spec.blocks == 0
+        Mgroups = ceil(Int, M / spec.threads[1])
+        Ngroups = ceil(Int, N / spec.threads[2])
+        spec.blocks = (Mgroups, Ngroups)
+    end
+    @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi_MN(
+        (M, N),
+        f, x...)
+    if spec.sync
+        oneAPI.synchronize(spec.stream)
+    end
+end
+
+function JACC.parallel_for(
+        ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
     maxPossibleItems = 16
-    Litems = min(M, maxPossibleItems)
+    Litems = min(L, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
     Nitems = 1
     Lgroups = ceil(Int, L / Litems)
@@ -51,6 +88,31 @@ function JACC.parallel_for(
     oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
         Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L, M, N),
         f, x...)
+end
+
+function JACC.parallel_for(
+        spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
+    if spec.threads == 0
+        maxPossibleItems = 16
+        Litems = min(L, maxPossibleItems)
+        Mitems = min(M, maxPossibleItems)
+        Nitems = 1
+        spec.threads = (Litems, Mitems, Nitems)
+    end
+    if spec.blocks == 0
+        Lgroups = ceil(Int, L / spec.threads[1])
+        Mgroups = ceil(Int, M / spec.threads[2])
+        Ngroups = ceil(Int, N / spec.threads[3])
+        spec.blocks = (Lgroups, Mgroups, Ngroups)
+    end
+    @show spec.threads
+    @show spec.blocks
+    @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi_LMN(
+        (L, M, N),
+        f, x...)
+    if spec.sync
+        oneAPI.synchronize(spec.stream)
+    end
 end
 
 function JACC.parallel_reduce(
@@ -410,7 +472,8 @@ JACC.array(::oneAPIBackend, x::Base.Array) = oneAPI.oneArray(x)
 DefaultFloat = Union{Type, Nothing}
 
 function _get_default_float()
-    if oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
+    if oneL0.module_properties(device()).fp64flags &
+       oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
         return Float64
     else
         @info """Float64 unsupported on the current device.

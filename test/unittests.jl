@@ -46,6 +46,41 @@ end
     @test Base.Array(x_device)≈x_expected rtol=1e-1
 end
 
+@testset "LaunchSpec" begin
+    N = 100
+    dims = (N)
+    a = round.(rand(Float32, dims) * 100)
+    a_expected = a .+ 5.0
+    a_device = JACC.array(a)
+    JACC.parallel_for(JACC.launch_spec(; threads = 1000), N,
+        (i, a) -> begin
+            @inbounds a[i] += 5.0
+        end, a_device)
+    @test Base.Array(a_device)≈a_expected rtol=1e-5
+
+    A = JACC.ones(Float32, N, N)
+    B = JACC.ones(Float32, N, N)
+    C = JACC.zeros(Float32, N, N)
+    JACC.parallel_for(JACC.launch_spec(; threads = (16, 16)),
+        (N, N), (i, j, A, B, C) -> begin
+            @inbounds C[i, j] = A[i, j] + B[i, j]
+        end,
+        A, B, C)
+    C_expected = Float32(2.0) .* ones(Float32, N, N)
+    @test Base.Array(C)≈C_expected rtol=1e-5
+
+    A = JACC.ones(Float32, N, N, N)
+    B = JACC.ones(Float32, N, N, N)
+    C = JACC.zeros(Float32, N, N, N)
+    JACC.parallel_for(JACC.launch_spec(; threads = (4, 4, 4)),
+        (N, N, N), (i, j, k, A, B, C) -> begin
+            @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
+        end,
+        A, B, C)
+    C_expected = Float32(2.0) .* ones(Float32, N, N, N)
+    @test Base.Array(C)≈C_expected rtol=1e-5
+end
+
 @testset "zeros" begin
     N = 10
     x = JACC.zeros(N)
@@ -93,10 +128,10 @@ end
 end
 
 @testset "reduce" begin
-    a = JACC.array([1 for i=1:10])
+    a = JACC.array([1 for i in 1:10])
     @test JACC.parallel_reduce(a) == 10
     @test JACC.parallel_reduce(min, a) == 1
-    a2 = JACC.ones(Int, (2,2))
+    a2 = JACC.ones(Int, (2, 2))
     @test JACC.parallel_reduce(min, a2) == 1
 
     SIZE = 1000
@@ -113,11 +148,13 @@ end
 
     ah2 = randn(FloatType, (SIZE, SIZE))
     ad2 = JACC.array(ah2)
-    mxd = JACC.parallel_reduce((SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
+    mxd = JACC.parallel_reduce(
+        (SIZE, SIZE), max, (i, j, a) -> a[i, j], ad2; init = -Inf)
     @test mxd == maximum(ah2)
     mxd = JACC.parallel_reduce(max, ad2)
     @test mxd == maximum(ah2)
-    mnd = JACC.parallel_reduce((SIZE, SIZE), min, (i, j, a) -> a[i, j], ad2; init = Inf)
+    mnd = JACC.parallel_reduce(
+        (SIZE, SIZE), min, (i, j, a) -> a[i, j], ad2; init = Inf)
     @test mnd == minimum(ah2)
     mnd = JACC.parallel_reduce(min, ad2)
     @test mnd == minimum(ah2)
@@ -175,18 +212,18 @@ end
 
     x = ones(1_000)
     y = ones(1_000)
-    y1 = y*2
+    y1 = y * 2
     jx = JACC.ones(1_000)
     jy = JACC.ones(1_000)
-    jy1 = jy*2
+    jy1 = jy * 2
     alpha = 2.0
-  
+
     function seq_scal(N, alpha, x)
         for i in 1:N
             @inbounds x[i] = alpha * x[i]
         end
     end
- 
+
     function seq_asum(N, x)
         r = 0.0
         for i in 1:N
@@ -194,50 +231,50 @@ end
         end
         return r
     end
- 
+
     function seq_nrm2(N, x)
         sum_sq = 0.0
         for i in 1:N
-            @inbounds sum_sq += x[i]*x[i]
+            @inbounds sum_sq += x[i] * x[i]
         end
         r = sqrt(sum_sq)
         return r
     end
- 
+
     function seq_swap(N, x, y1)
         for i in 1:N
             @inbounds t = x[i]
             @inbounds x[i] = y1[i]
             @inbounds y1[i] = t
-        end       
+        end
     end
 
     ref_result = seq_axpy(1_000, alpha, x, y)
-    ref_result = seq_dot(1_000, x, y)   
+    ref_result = seq_dot(1_000, x, y)
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
     jresult = JACC.BLAS.dot(1_000, jx, jy)
     @test jresult≈ref_result rtol=1e-8
 
     seq_scal(1_000, alpha, x)
     JACC.BLAS.scal(1_000, alpha, jx)
-    @test x≈Base.Array(jx) rtol=1e-8 
+    @test x≈Base.Array(jx) rtol=1e-8
 
     seq_axpy(1_000, alpha, x, y)
     JACC.BLAS.axpy(1_000, alpha, jx, jy)
     @test x≈Base.Array(jx) atol=1e-8
 
-    r1 = seq_dot(1_000, x, y) 
+    r1 = seq_dot(1_000, x, y)
     r2 = JACC.BLAS.dot(1_000, jx, jy)
-    @test r1≈r2 atol=1e-8 
+    @test r1≈r2 atol=1e-8
 
     r1 = seq_asum(1_000, x)
     r2 = JACC.BLAS.asum(1_000, jx)
-    @test r1≈r2 atol=1e-8 
+    @test r1≈r2 atol=1e-8
     r1 = seq_nrm2(1_000, x)
     r2 = JACC.BLAS.nrm2(1_000, jx)
-    @test r1≈r2 atol=1e-8 
+    @test r1≈r2 atol=1e-8
 
-    seq_swap(1_000, x, y1)  
+    seq_swap(1_000, x, y1)
     JACC.BLAS.swap(1_000, jx, jy1)
     @test x == Base.Array(jx)
     @test y1 == Base.Array(jy1)
@@ -298,19 +335,19 @@ end
     end
 
     SIZE = 10
-	a0 = JACC.ones(SIZE)
-	a1 = JACC.ones(SIZE)
-	a2 = JACC.ones(SIZE)
-	r = JACC.ones(SIZE)
-	p = JACC.ones(SIZE)
-	s = JACC.zeros(SIZE)
-	x = JACC.zeros(SIZE)
-	r_old = JACC.zeros(SIZE)
-	r_aux = JACC.zeros(SIZE)
+    a0 = JACC.ones(SIZE)
+    a1 = JACC.ones(SIZE)
+    a2 = JACC.ones(SIZE)
+    r = JACC.ones(SIZE)
+    p = JACC.ones(SIZE)
+    s = JACC.zeros(SIZE)
+    x = JACC.zeros(SIZE)
+    r_old = JACC.zeros(SIZE)
+    r_aux = JACC.zeros(SIZE)
     a1 = a1 * 4
     r = r * 0.5
     p = p * 0.5
-	cond = 1.0
+    cond = 1.0
 
     while cond[1, 1] >= 1e-14
         r_old = copy(r)

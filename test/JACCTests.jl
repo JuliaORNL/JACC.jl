@@ -21,9 +21,7 @@ end
 const FloatType = JACC.default_float()
 using ChangePrecision
 @changeprecision FloatType begin
-
-include("unittests.jl")
-
+    include("unittests.jl")
 end # @changeprecision
 
 end
