@@ -7,7 +7,7 @@ end
     using oneAPI, oneAPI.oneL0
     N = 10
     x = JACC.zeros(N)
-    @test typeof(x) == oneVector{FloatType,oneL0.DeviceBuffer}
+    @test typeof(x) == oneVector{FloatType, oneL0.DeviceBuffer}
     @test eltype(x) == FloatType
 end
 
@@ -15,6 +15,6 @@ end
     using oneAPI, oneAPI.oneL0
     N = 10
     x = JACC.ones(N)
-    @test typeof(x) == oneVector{FloatType,oneL0.DeviceBuffer}
+    @test typeof(x) == oneVector{FloatType, oneL0.DeviceBuffer}
     @test eltype(x) == FloatType
 end

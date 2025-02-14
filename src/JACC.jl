@@ -33,17 +33,38 @@ export default_float
 export @atomic
 export parallel_for, parallel_reduce
 export shared
+export LaunchSpec
+export synchronize
 
-function parallel_for(
-        ::ThreadsBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
+synchronize(::ThreadsBackend) = nothing
+
+function default_stream end
+
+@kwdef mutable struct LaunchSpec{Backend}
+    stream = default_stream(Backend)
+    threads = 0
+    blocks = 0
+    shmem_size::Int = 0
+    sync::Bool = false
+end
+
+launch_spec(; kw...) = LaunchSpec{typeof(default_backend())}(; kw...)
+
+default_stream(::Type{ThreadsBackend}) = nothing
+
+function parallel_for(::ThreadsBackend, N::Integer, f::Function, x...)
     @maybe_threaded for i in 1:N
         f(i, x...)
     end
 end
 
 function parallel_for(
-        ::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
+        ::LaunchSpec{ThreadsBackend}, N::Integer, f::Function, x...)
+    parallel_for(ThreadsBackend(), N, f, x...)
+end
+
+function parallel_for(
+        ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Function, x...)
     @maybe_threaded for j in 1:N
         for i in 1:M
             f(i, j, x...)
@@ -52,9 +73,12 @@ function parallel_for(
 end
 
 function parallel_for(
-        ::ThreadsBackend, (L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {
-        I <: Integer, F <: Function}
+        ::LaunchSpec{ThreadsBackend}, (M, N)::NTuple{2, Integer}, f::Function, x...)
+    parallel_for(ThreadsBackend(), (M, N), f, x...)
+end
+
+function parallel_for(
+        ::ThreadsBackend, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
     # only threaded at the first level (no collapse equivalent)
     @maybe_threaded for k in 1:N
         for j in 1:M
@@ -63,6 +87,11 @@ function parallel_for(
             end
         end
     end
+end
+
+function parallel_for(
+        ::LaunchSpec{ThreadsBackend}, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
+    parallel_for(ThreadsBackend(), (L, M, N), f, x...)
 end
 
 function parallel_reduce(
@@ -110,33 +139,33 @@ array(x::Base.Array) = array(default_backend(), x)
 
 default_float() = default_float(default_backend())
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
+synchronize(; kw...) = synchronize(default_backend(); kw...)
+
+function parallel_for(N::Integer, f::Function, x...)
     return parallel_for(default_backend(), N, f, x...)
 end
 
-function parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
+function parallel_for((M, N)::NTuple{2, Integer}, f::Function, x...)
     return parallel_for(default_backend(), (M, N), f, x...)
 end
 
-function parallel_for((L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {I <: Integer, F <: Function}
+function parallel_for((L, M, N)::NTuple{3, Integer}, f::Function, x...)
     return parallel_for(default_backend(), (L, M, N), f, x...)
 end
 
 default_init(::Type{T}, ::typeof(+)) where {T} = zero(T)
 default_init(::Type{T}, ::typeof(*)) where {T} = one(T)
-default_init(::Type{T}, ::typeof(max)) where{T} = typemin(T)
-default_init(::Type{T}, ::typeof(min)) where{T} = typemax(T)
+default_init(::Type{T}, ::typeof(max)) where {T} = typemin(T)
+default_init(::Type{T}, ::typeof(min)) where {T} = typemax(T)
 default_init(op::Function) = default_init(default_float(), op)
 
-function parallel_reduce(
-        N::I, op::Function, f::Function, x...; init) where {I <: Integer}
+function parallel_reduce(N::Integer, op::Function, f::Function, x...; init)
     return parallel_reduce(default_backend(), N, op, f, x...; init = init)
 end
 
-function parallel_reduce((M, N)::Tuple{I, I}, op::Function, f::Function, x...;
-        init) where {I <: Integer}
+function parallel_reduce(
+        (M, N)::NTuple{2, Integer}, op::Function, f::Function, x...;
+        init)
     return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
 end
 
@@ -144,18 +173,19 @@ function parallel_reduce(N::Integer, f::Function, x...)
     return parallel_reduce(N, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce((M, N)::Tuple{Integer, Integer}, f::Function, x...)
+function parallel_reduce((M, N)::NTuple{2, Integer}, f::Function, x...)
     return parallel_reduce((M, N), +, f, x...; init = default_init(+))
 end
 
 array_size(a::AbstractArray) = size(a)
 array_size(a::AbstractVector) = length(a)
 
-elem_access(a::AbstractArray) = (i,j,k,a) -> a[i,j,k]
-elem_access(a::AbstractMatrix) = (i,j,a) -> a[i,j]
-elem_access(a::AbstractVector) = (i,a) -> a[i]
+elem_access(a::AbstractArray) = (i, j, k, a) -> a[i, j, k]
+elem_access(a::AbstractMatrix) = (i, j, a) -> a[i, j]
+elem_access(a::AbstractVector) = (i, a) -> a[i]
 
-function parallel_reduce(op::Function, a::AbstractArray; init = default_init(eltype(a), op))
+function parallel_reduce(
+        op::Function, a::AbstractArray; init = default_init(eltype(a), op))
     return parallel_reduce(array_size(a), op, elem_access(a), a; init = init)
 end
 

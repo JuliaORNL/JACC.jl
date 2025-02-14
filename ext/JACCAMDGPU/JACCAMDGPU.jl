@@ -16,15 +16,40 @@ using .Experimental
 
 JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
 
-function JACC.parallel_for(
-        ::AMDGPUBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
+default_stream() = AMDGPU.stream()
+
+JACC.default_stream(::Type{AMDGPUBackend}) = default_stream()
+
+function JACC.parallel_for(::AMDGPUBackend, N::Integer, f::Function, x...)
     kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
     config = AMDGPU.launch_configuration(kernel)
     threads = min(N, config.groupsize)
     blocks = cld(N, threads)
     shmem_size = 2 * threads * sizeof(Float64)
-    kernel(N, f, x...; groupsize=threads, gridsize=blocks, shmem=shmem_size)
+    kernel(
+        N, f, x...; groupsize = threads, gridsize = blocks, shmem = shmem_size)
     AMDGPU.synchronize()
+end
+
+function JACC.parallel_for(
+        spec::LaunchSpec{AMDGPUBackend}, N::Integer, f::Function, x...)
+    kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
+    if spec.threads == 0
+        config = AMDGPU.launch_configuration(kernel)
+        spec.threads = min(N, config.groupsize)
+    end
+    if spec.blocks == 0
+        spec.blocks = cld(N, spec.threads)
+    end
+    if spec.shmem_size == nothing
+        spec.shmem_size = 2 * spec.threads * sizeof(Float64)
+    end
+    kernel(
+        N, f, x...; groupsize = spec.threads, gridsize = spec.blocks,
+        shmem = spec.shmem_size, stream = spec.stream)
+    if spec.sync
+        AMDGPU.synchronize(spec.stream)
+    end
 end
 
 abstract type BlockIndexer2D end
@@ -46,8 +71,7 @@ function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
 end
 
 function JACC.parallel_for(
-        ::AMDGPUBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
+        ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, f::Function, x...)
     dev = AMDGPU.device()
     props = AMDGPU.HIP.properties(dev)
     maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
@@ -64,7 +88,7 @@ function JACC.parallel_for(
     blockAttrs = (
         max_x = props.maxThreadsDim[1],
         max_y = props.maxThreadsDim[2],
-        total = props.maxThreadsPerBlock,
+        total = props.maxThreadsPerBlock
     )
     x_thr = min(
         blockAttrs.max_x,
@@ -81,14 +105,65 @@ function JACC.parallel_for(
     blocks = (cld(m, x_thr), cld(n, y_thr))
 
     shmem_size = 2 * x_thr * y_thr * sizeof(Float64)
-    kernel(indexer, (M, N), f, x...; groupsize=threads, gridsize=blocks, shmem=shmem_size)
+    kernel(indexer, (M, N), f, x...; groupsize = threads,
+        gridsize = blocks, shmem = shmem_size)
     AMDGPU.synchronize()
 end
 
 function JACC.parallel_for(
-        ::AMDGPUBackend, (L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {
-        I <: Integer, F <: Function}
+        spec::LaunchSpec{AMDGPUBackend}, (M, N)::NTuple{2, Integer}, f::Function, x...)
+    dev = AMDGPU.device()
+    props = AMDGPU.HIP.properties(dev)
+    indexer = BlockIndexerBasic()
+    m, n = (M, N)
+
+    kernel = @roc launch=false _parallel_for_amdgpu_MN(indexer, (M, N), f, x...)
+    config = AMDGPU.launch_configuration(kernel)
+
+    if spec.threads == 0
+        maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
+        if M < N && maxBlocks.x > maxBlocks.y
+            indexer = BlockIndexerSwapped()
+            m, n = (N, M)
+        end
+        maxThreads = config.groupsize
+        blockAttrs = (
+            max_x = props.maxThreadsDim[1],
+            max_y = props.maxThreadsDim[2],
+            total = props.maxThreadsPerBlock
+        )
+        x_thr = min(
+            blockAttrs.max_x,
+            nextpow(2, m / blockAttrs.total + 1),
+            blockAttrs.total,
+            maxThreads
+        )
+        y_thr = min(
+            blockAttrs.max_y,
+            cld(blockAttrs.total, x_thr),
+            cld(maxThreads, x_thr)
+        )
+        spec.threads = (x_thr, y_thr)
+    end
+
+    if spec.blocks == 0
+        spec.blocks = (cld(m, spec.threads[1]), cld(n, spec.threads[2]))
+    end
+
+    if spec.shmem_size == 0
+        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
+                          sizeof(Float64)
+    end
+
+    kernel(indexer, (M, N), f, x...; groupsize = spec.threads,
+        gridsize = spec.blocks, shmem = spec.shmem_size, stream = spec.stream)
+    if spec.sync
+        AMDGPU.synchronize(spec.stream)
+    end
+end
+
+function JACC.parallel_for(
+        ::AMDGPUBackend, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
     numThreads = 32
     Lthreads = min(L, numThreads)
     Mthreads = min(M, numThreads)
@@ -103,6 +178,33 @@ function JACC.parallel_for(
         Lblocks, Mblocks, Nblocks) shmem=shmem_size _parallel_for_amdgpu_LMN(
         (L, M, N), f, x...)
     AMDGPU.synchronize()
+end
+
+function JACC.parallel_for(
+        spec::LaunchSpec{AMDGPUBackend}, (L, M, N)::NTuple{3, Integer}, f::Function,
+        x...)
+    if spec.threads == 0
+        numThreads = 32
+        Lthreads = min(L, numThreads)
+        Mthreads = min(M, numThreads)
+        Nthreads = 1
+        spec.threads = (Lthreads, Mthreads, Nthreads)
+    end
+    if spec.blocks == 0
+        Lblocks = ceil(Int, L / spec.threads[1])
+        Mblocks = ceil(Int, M / spec.threads[2])
+        Nblocks = ceil(Int, N / spec.threads[3])
+        spec.blocks = (Lblocks, Mblocks, Nblocks)
+    end
+    if spec.shmem_size == 0
+        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
+                          spec.threads[3] * sizeof(Float64)
+    end
+    @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_for_amdgpu_LMN(
+        (L, M, N), f, x...)
+    if spec.sync
+        AMDGPU.synchronize(spec.stream)
+    end
 end
 
 function JACC.parallel_reduce(
