@@ -209,17 +209,32 @@ end
 
 function JACC.parallel_reduce(
         ::AMDGPUBackend, N::Integer, op, f::Function, x...; init)
-    numThreads = 512
-    threads = numThreads
-    blocks = ceil(Int, N / threads)
-    ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
+    ret_inst = AMDGPU.ROCArray{typeof(init)}(undef, 0)
+    kernel1 = @roc launch=false _parallel_reduce_amdgpu(
+        N, op, ret_inst, f, x...)
+    config1 = AMDGPU.launch_configuration(kernel1)
+    threads1 = config1.groupsize
+
     rret = AMDGPU.ROCArray([init])
-    @roc groupsize=threads gridsize=blocks _parallel_reduce_amdgpu(
-        N, op, ret, f, x...)
+    kernel2 = @roc launch=false reduce_kernel_amdgpu(1, op, ret_inst, rret)
+    config2 = AMDGPU.launch_configuration(kernel2)
+    threads2 = config2.groupsize
+
+    threads = min(threads1, threads2, 512)
+    blocks = cld(N, threads)
+
+    shmem_size = threads * sizeof(Float64)
+
+    ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
+
+    kernel1(
+        N, op, ret, f, x...; groupsize = threads,
+        gridsize = blocks, shmem = shmem_size)
     AMDGPU.synchronize()
-    @roc groupsize=threads gridsize=1 reduce_kernel_amdgpu(
-        blocks, op, ret, rret)
+    kernel2(blocks, op, ret, rret; groupsize = threads,
+        gridsize = 1, shmem = shmem_size)
     AMDGPU.synchronize()
+
     return Base.Array(rret)[]
 end
 
@@ -268,7 +283,8 @@ function _parallel_for_amdgpu_LMN((L, M, N), f, x...)
 end
 
 function _parallel_reduce_amdgpu(N, op, ret, f, x...)
-    shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
+    shmem_length = workgroupDim().x
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     ti = workitemIdx().x
     shared_mem[ti] = ret[workgroupIdx().x]
@@ -278,97 +294,53 @@ function _parallel_reduce_amdgpu(N, op, ret, f, x...)
         shared_mem[ti] = tmp
     end
     AMDGPU.sync_workgroup()
-    if (ti <= 256)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 256])
+    tn = div(shmem_length, 2)
+    while tn > 1
+        if ti <= tn
+            shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
+        end
+        AMDGPU.sync_workgroup()
+        tn = div(tn, 2)
     end
-    AMDGPU.sync_workgroup()
-    if (ti <= 128)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 128])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 64)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 64])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 32)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 32])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 16)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 16])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 8)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 8])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 4)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 4])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 2)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 2])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti == 1)
+    if ti == 1
         shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 1])
         ret[workgroupIdx().x] = shared_mem[ti]
     end
-    AMDGPU.sync_workgroup()
+
     return nothing
 end
 
 function reduce_kernel_amdgpu(N, op, red, ret)
-    shared_mem = @ROCStaticLocalArray(eltype(ret), 512)
+    shmem_length = workgroupDim().x
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length)
     i = workitemIdx().x
     ii = i
     tmp = ret[1]
-    if N > 512
+    if N > shmem_length
         while ii <= N
             tmp = op(tmp, @inbounds red[ii])
-            ii += 512
+            ii += shmem_length
         end
     elseif (i <= N)
         tmp = @inbounds red[i]
     end
     shared_mem[i] = tmp
     AMDGPU.sync_workgroup()
-    if (i <= 256)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 256])
+
+    tn = div(shmem_length, 2)
+    while tn > 1
+        if i <= tn
+            shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
+        end
+        AMDGPU.sync_workgroup()
+        tn = div(tn, 2)
     end
-    AMDGPU.sync_workgroup()
-    if (i <= 128)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 128])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 64)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 64])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 32)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 32])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 16)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 16])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 8)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 8])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 4)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 4])
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 2)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 2])
-    end
-    AMDGPU.sync_workgroup()
-    if (i == 1)
+
+    if i == 1
         shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
         ret[1] = shared_mem[1]
     end
+
     return nothing
 end
 
