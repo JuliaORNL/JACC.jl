@@ -17,9 +17,9 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
 
 [extensions]
-JACCAMDGPU = ["AMDGPU"]
-JACCCUDA = ["CUDA"]
-JACCONEAPI = ["oneAPI"]
+AMDGPUExt = ["AMDGPU"]
+CUDAExt = ["CUDA"]
+oneAPIExt = ["oneAPI"]
 
 [compat]
 AMDGPU = "1.1.6"
@@ -27,3 +27,4 @@ Atomix = "1.0.1"
 CUDA = "5"
 Preferences = "1.4.0"
 julia = "1.9, 1.10, 1.11"
+oneAPI = "1.6.1"

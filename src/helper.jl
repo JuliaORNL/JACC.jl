@@ -1,24 +1,9 @@
 
-function _maybe_threaded(ex)
-    quote
-        if Threads.nthreads() == 1
-            $ex
-        else
-            Threads.@threads :static $ex
-        end
-    end
-end
-
-macro maybe_threaded(ex)
-    esc(_maybe_threaded(ex))
-end
-
 function _init_backend()
     quote
         using Pkg
         deps = Pkg.project().dependencies
-        const backend = JACC.JACCPreferences.backend
-        if backend == "cuda"
+        if JACC.backend == "cuda"
             if !haskey(deps, "CUDA")
                 Pkg.add("CUDA")
                 @info "Added CUDA (be careful about committing Project.toml)"
@@ -26,7 +11,7 @@ function _init_backend()
             using CUDA
             @info "CUDA backend loaded"
 
-        elseif backend == "amdgpu"
+        elseif JACC.backend == "amdgpu"
             if !haskey(deps, "AMDGPU")
                 Pkg.add("AMDGPU")
                 @info "Added AMDGPU (be careful about committing Project.toml)"
@@ -34,7 +19,7 @@ function _init_backend()
             using AMDGPU
             @info "AMDGPU backend loaded"
 
-        elseif backend == "oneapi"
+        elseif JACC.backend == "oneapi"
             if !haskey(deps, "oneAPI")
                 Pkg.add("oneAPI")
                 @info "Added oneAPI (be careful about committing Project.toml)"
@@ -42,7 +27,7 @@ function _init_backend()
             using oneAPI
             @info "oneAPI backend loaded"
 
-        elseif backend == "threads"
+        elseif JACC.backend == "threads"
             @info "Threads backend loaded"
         end
     end

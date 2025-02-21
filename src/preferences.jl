@@ -1,6 +1,3 @@
-
-module JACCPreferences
-
 using Preferences
 
 const supported_backends = ("threads", "cuda", "amdgpu", "oneapi")
@@ -19,5 +16,3 @@ end
 
 const backend = @load_preference("backend", "threads")
 const _backend_dispatchable = Val{Symbol(backend)}()
-
-end # module JACCPreferences

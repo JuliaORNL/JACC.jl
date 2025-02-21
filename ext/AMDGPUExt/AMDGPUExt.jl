@@ -1,5 +1,6 @@
-module JACCAMDGPU
+module AMDGPUExt
 
+import Base: Callable
 using JACC, AMDGPU
 
 const AMDGPUBackend = ROCBackend
@@ -7,11 +8,11 @@ const AMDGPUBackend = ROCBackend
 # overloaded array functions
 include("array.jl")
 
-include("JACCMULTI.jl")
+include("multi.jl")
 using .Multi
 
 # overloaded experimental functions
-include("JACCEXPERIMENTAL.jl")
+include("experimental/experimental.jl")
 using .Experimental
 
 JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
@@ -20,7 +21,7 @@ default_stream() = AMDGPU.stream()
 
 JACC.default_stream(::Type{AMDGPUBackend}) = default_stream()
 
-function JACC.parallel_for(::AMDGPUBackend, N::Integer, f::Function, x...)
+function JACC.parallel_for(::AMDGPUBackend, N::Integer, f::Callable, x...)
     kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
     config = AMDGPU.launch_configuration(kernel)
     threads = min(N, config.groupsize)
@@ -32,7 +33,7 @@ function JACC.parallel_for(::AMDGPUBackend, N::Integer, f::Function, x...)
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{AMDGPUBackend}, N::Integer, f::Function, x...)
+        spec::LaunchSpec{AMDGPUBackend}, N::Integer, f::Callable, x...)
     kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
     if spec.threads == 0
         config = AMDGPU.launch_configuration(kernel)
@@ -71,7 +72,7 @@ function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
 end
 
 function JACC.parallel_for(
-        ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, f::Function, x...)
+        ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
     dev = AMDGPU.device()
     props = AMDGPU.HIP.properties(dev)
     maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
@@ -111,7 +112,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{AMDGPUBackend}, (M, N)::NTuple{2, Integer}, f::Function, x...)
+        spec::LaunchSpec{AMDGPUBackend}, (M, N)::NTuple{2, Integer}, f::Callable, x...)
     dev = AMDGPU.device()
     props = AMDGPU.HIP.properties(dev)
     indexer = BlockIndexerBasic()
@@ -163,7 +164,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::AMDGPUBackend, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
+        ::AMDGPUBackend, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
     numThreads = 32
     Lthreads = min(L, numThreads)
     Mthreads = min(M, numThreads)
@@ -181,7 +182,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{AMDGPUBackend}, (L, M, N)::NTuple{3, Integer}, f::Function,
+        spec::LaunchSpec{AMDGPUBackend}, (L, M, N)::NTuple{3, Integer}, f::Callable,
         x...)
     if spec.threads == 0
         numThreads = 32
@@ -208,7 +209,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_reduce(
-        ::AMDGPUBackend, N::Integer, op, f::Function, x...; init)
+        ::AMDGPUBackend, N::Integer, op, f::Callable, x...; init)
     ret_inst = AMDGPU.ROCArray{typeof(init)}(undef, 0)
     kernel1 = @roc launch=false _parallel_reduce_amdgpu(
         N, op, ret_inst, f, x...)
@@ -239,7 +240,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        ::AMDGPUBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
+        ::AMDGPUBackend, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
     numThreads = 16
     Mthreads = numThreads
     Nthreads = numThreads
@@ -543,4 +544,4 @@ JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray
 
 JACC.array(::AMDGPUBackend, x::Base.Array) = AMDGPU.ROCArray(x)
 
-end # module JACCAMDGPU
+end # module AMDGPUExt

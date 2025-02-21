@@ -1,6 +1,6 @@
 
 @testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "amdgpu"
+    @test JACC.backend == "amdgpu"
 end
 
 @testset "zeros_type" begin

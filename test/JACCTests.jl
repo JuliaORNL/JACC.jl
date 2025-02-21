@@ -3,18 +3,16 @@ module JACCTests
 import JACC
 using ReTest
 
-const backend = JACC.JACCPreferences.backend
-
-@static if backend == "cuda"
+@static if JACC.backend == "cuda"
     using CUDA
     include("tests_cuda.jl")
-elseif backend == "amdgpu"
+elseif JACC.backend == "amdgpu"
     using AMDGPU
     include("tests_amdgpu.jl")
-elseif backend == "oneapi"
+elseif JACC.backend == "oneapi"
     using oneAPI
     include("tests_oneapi.jl")
-elseif backend == "threads"
+elseif JACC.backend == "threads"
     include("tests_threads.jl")
 end
 
