@@ -11,7 +11,6 @@ function get_backend end
 
 default_backend() = get_backend(_backend_dispatchable)
 
-include("helper.jl")
 include("array.jl")
 
 include("blas.jl")

@@ -1,4 +1,5 @@
 import JACC
+JACC._check_install_backend()
 JACC.@init_backend
 
 using ReTest
