@@ -489,10 +489,10 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
+function JACC.shared(::oneAPIBackend, x::AbstractArray)
     size::Int32 = length(x)
     # This is wrong, we should use size not 512 ...
-    shmem = oneLocalArray(T, 512)
+    shmem = oneLocalArray(eltype(x), 512)
     num_threads = get_local_size(1) * get_local_size(2)
     if (size <= num_threads)
         if get_local_size(2) == 1
@@ -535,6 +535,8 @@ function JACC.shared(x::oneDeviceArray{T, N}) where {T, N}
     barrier()
     return shmem
 end
+
+JACC.sync_workgroup(::oneAPIBackend) = oneAPI.barrier()
 
 JACC.array_type(::oneAPIBackend) = oneAPI.oneArray
 
