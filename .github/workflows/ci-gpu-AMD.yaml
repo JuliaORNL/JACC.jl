@@ -77,7 +77,7 @@ jobs:
           source /etc/profile.d/lmod.sh
           module load julia/1.11.3
           julia --project -e 'using Pkg; Pkg.instantiate()'
-          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("AMDGPU")'
+          julia --project -e 'using JACC; JACC.set_backend("AMDGPU")'
 
       - name: Test
         if: steps.check.outputs.triggered == 'true'

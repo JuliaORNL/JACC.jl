@@ -1,12 +1,13 @@
-module JACCONEAPI
+module oneAPIExt
 
+import Base: Callable
 using JACC, oneAPI, oneAPI.oneL0
 
 # overloaded array functions
 include("array.jl")
 
 # overloaded experimental functions
-include("JACCEXPERIMENTAL.jl")
+include("experimental/experimental.jl")
 using .Experimental
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
@@ -19,7 +20,7 @@ function JACC.synchronize(::oneAPIBackend; stream = default_stream())
     oneAPI.synchronize(stream)
 end
 
-function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Function, x...)
+function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Callable, x...)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
     groups = ceil(Int, N / items)
@@ -28,7 +29,7 @@ function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Function, x...)
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, N::Integer, f::Function, x...)
+        spec::LaunchSpec{oneAPIBackend}, N::Integer, f::Callable, x...)
     if spec.threads == 0
         maxPossibleItems = 256
         spec.threads = min(N, maxPossibleItems)
@@ -44,7 +45,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, f::Function, x...)
+        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
@@ -56,7 +57,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, f::Function, x...)
+        spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, f::Callable, x...)
     if spec.threads == 0
         maxPossibleItems = 16
         Mitems = min(M, maxPossibleItems)
@@ -77,7 +78,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
+        ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
     maxPossibleItems = 16
     Litems = min(L, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
@@ -91,7 +92,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, f::Function, x...)
+        spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
     if spec.threads == 0
         maxPossibleItems = 16
         Litems = min(L, maxPossibleItems)
@@ -105,8 +106,6 @@ function JACC.parallel_for(
         Ngroups = ceil(Int, N / spec.threads[3])
         spec.blocks = (Lgroups, Mgroups, Ngroups)
     end
-    @show spec.threads
-    @show spec.blocks
     @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi_LMN(
         (L, M, N),
         f, x...)
@@ -116,7 +115,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_reduce(
-        ::oneAPIBackend, N::Integer, op, f::Function, x...; init)
+        ::oneAPIBackend, N::Integer, op, f::Callable, x...; init)
     numItems = 256
     items = numItems
     groups = ceil(Int, N / items)
@@ -130,7 +129,7 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
-        ::oneAPIBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
+        ::oneAPIBackend, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
     numItems = 16
     Mitems = numItems
     Nitems = numItems
@@ -491,4 +490,4 @@ function JACC.default_float(::oneAPIBackend)
     return DefaultFloat
 end
 
-end # module JACCONEAPI
+end # module oneAPIExt

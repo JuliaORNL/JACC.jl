@@ -1,6 +1,6 @@
 
 @testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "cuda"
+    @test JACC.backend == "cuda"
 end
 
 @testset "zeros_type" begin

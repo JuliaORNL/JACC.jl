@@ -1,6 +1,6 @@
 
 @testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "threads"
+    @test JACC.backend == "threads"
 end
 
 @testset "zeros_type" begin

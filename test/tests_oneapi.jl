@@ -1,6 +1,6 @@
 
 @testset "TestBackend" begin
-    @test JACC.JACCPreferences.backend == "oneapi"
+    @test JACC.backend == "oneapi"
 end
 
 @testset "zeros_type" begin

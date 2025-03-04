@@ -1,6 +1,4 @@
 
-module JACCPreferences
-
 using Preferences
 using Pkg
 
@@ -53,4 +51,26 @@ const _backend_dispatchable = Val{Symbol(backend)}()
 
 _check_install_backend() = _check_install_backend(backend)
 
-end # module JACCPreferences
+function _init_backend()
+    quote
+        if JACC.backend == "cuda"
+            using CUDA
+            @info "CUDA backend loaded"
+
+        elseif JACC.backend == "amdgpu"
+            using AMDGPU
+            @info "AMDGPU backend loaded"
+
+        elseif JACC.backend == "oneapi"
+            using oneAPI
+            @info "oneAPI backend loaded"
+
+        elseif JACC.backend == "threads"
+            @info "Threads backend loaded"
+        end
+    end
+end
+
+macro init_backend()
+    return esc(_init_backend())
+end
