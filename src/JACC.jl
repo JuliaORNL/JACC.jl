@@ -123,15 +123,19 @@ function parallel_reduce(
     return ret
 end
 
+function shared(::ThreadsBackend, x::AbstractArray)
+    return x
+end
+
 array_type(::ThreadsBackend) = Base.Array
 
 array(::ThreadsBackend, x::Base.Array) = x
 
 default_float(::Any) = Float64
 
-function shared(x::Base.Array{T, N}) where {T, N}
-    return x
-end
+shared(x::AbstractArray) = shared(default_backend(), x)
+
+sync_workgroup() = sync_workgroup(default_backend())
 
 array_type() = array_type(default_backend())
 
