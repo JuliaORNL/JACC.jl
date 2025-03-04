@@ -4,9 +4,9 @@ import Base: Callable
 using JACC
 using JACC.ThreadsImpl: ThreadsBackend
 
-function JACC.Async.Array(::ThreadsBackend, queue_id::Integer,
+function JACC.Async.array(::ThreadsBackend, queue_id::Integer,
         x::Base.Array{T, N}) where {T, N}
-    return JACC.Array(x)
+    return JACC.array(x)
 end
 
 function JACC.Async.copy(

@@ -1,16 +1,14 @@
 module JACCTests
 
 import JACC
+JACC.@init_backend
 using ReTest
 
 @static if JACC.backend == "cuda"
-    using CUDA
     include("tests_cuda.jl")
 elseif JACC.backend == "amdgpu"
-    using AMDGPU
     include("tests_amdgpu.jl")
 elseif JACC.backend == "oneapi"
-    using oneAPI
     include("tests_oneapi.jl")
 elseif JACC.backend == "threads"
     include("tests_threads.jl")

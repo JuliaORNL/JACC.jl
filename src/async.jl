@@ -3,8 +3,8 @@ module Async
 import Base: Callable
 using JACC
 
-function Array(queue_id::Integer, x::Base.Array{T, N}) where {T, N}
-    return Array(JACC.default_backend(), queue_id, x)
+function array(queue_id::Integer, x::Base.Array{T, N}) where {T, N}
+    return array(JACC.default_backend(), queue_id, x)
 end
 
 function copy(
