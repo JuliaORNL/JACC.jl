@@ -75,7 +75,7 @@ jobs:
         if: steps.check.outputs.triggered == 'true'
         run: |
           julia --project -e 'using Pkg; Pkg.instantiate()'
-          julia --project -e 'using JACC.JACCPreferences; JACCPreferences.set_backend("CUDA")'
+          julia --project -e 'using JACC; JACC.set_backend("CUDA")'
 
       - name: Test
         if: steps.check.outputs.triggered == 'true'

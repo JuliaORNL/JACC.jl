@@ -1,5 +1,5 @@
 import JACC
-JACC.JACCPreferences._check_install_backend()
+JACC._check_install_backend()
 JACC.@init_backend
 
 using ReTest
