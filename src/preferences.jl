@@ -54,15 +54,15 @@ _check_install_backend() = _check_install_backend(backend)
 function _init_backend()
     quote
         if JACC.backend == "cuda"
-            using CUDA
+            import CUDA
             @info "CUDA backend loaded"
 
         elseif JACC.backend == "amdgpu"
-            using AMDGPU
+            import AMDGPU
             @info "AMDGPU backend loaded"
 
         elseif JACC.backend == "oneapi"
-            using oneAPI
+            import oneAPI
             @info "oneAPI backend loaded"
 
         elseif JACC.backend == "threads"
