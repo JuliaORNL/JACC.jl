@@ -2,7 +2,7 @@ module Multi
 
 import Base: Callable
 using JACC, AMDGPU
-using JACCAMDGPU: AMDGPUBackend
+using AMDGPUExt: AMDGPUBackend
 
 function JACC.Multi.ndev(::AMDGPUBackend)
     return length(AMDGPU.devices())
