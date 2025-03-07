@@ -178,7 +178,7 @@ end
 
     JACC.parallel_for(N, scal, x, y, alpha)
     JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
-    @test x≈x_shared rtol=1e-8
+    @test Base.Array(x)≈Base.Array(x_shared) rtol=1e-8
 end
 
 @testset "JACC.BLAS" begin
