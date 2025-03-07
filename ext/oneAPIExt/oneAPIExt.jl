@@ -172,7 +172,8 @@ function _parallel_for_oneapi_LMN((L, M, N), f, x...)
 end
 
 function _parallel_reduce_oneapi(N, op, ret, f, x...)
-    shared_mem = oneLocalArray(eltype(ret), 256)
+    shmem_length = 256
+    shared_mem = oneLocalArray(eltype(ret), shmem_length)
     i = get_global_id(0)
     ti = get_local_id(0)
     shared_mem[ti] = ret[get_group_id(0)]
@@ -182,34 +183,16 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
         shared_mem[ti] = tmp
     end
     barrier()
-    if (ti <= 128)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 128])
+
+    max_pwr = floor(Int, log2(shmem_length)) - 1
+    for p in (max_pwr:-1:1)
+        tn = 2^p
+        if (ti <= tn)
+            shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
+        end
+        barrier()
     end
-    barrier()
-    if (ti <= 64)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 64])
-    end
-    barrier()
-    if (ti <= 32)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 32])
-    end
-    barrier()
-    if (ti <= 16)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 16])
-    end
-    barrier()
-    if (ti <= 8)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 8])
-    end
-    barrier()
-    if (ti <= 4)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 4])
-    end
-    barrier()
-    if (ti <= 2)
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 2])
-    end
-    barrier()
+
     if (ti == 1)
         shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 1])
         ret[get_group_id(0)] = shared_mem[ti]
@@ -219,48 +202,30 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
 end
 
 function reduce_kernel_oneapi(N, op, red, ret)
-    shared_mem = oneLocalArray(eltype(ret), 256)
+    shmem_length = 256
+    shared_mem = oneLocalArray(eltype(ret), shmem_length)
     i = get_global_id(0)
     ii = i
     tmp = ret[1]
-    if N > 256
-        while ii <= N
+    if N > shmem_length
+        for ii in i:shmem_length:N
             tmp = op(tmp, @inbounds red[ii])
-            ii += 256
         end
     elseif (i <= N)
         tmp = @inbounds red[i]
     end
     shared_mem[i] = tmp
     barrier()
-    if (i <= 128)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 128])
+
+    max_pwr = floor(Int, log2(shmem_length)) - 1
+    for p in (max_pwr:-1:1)
+        tn = 2^p
+        if i <= tn
+            shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
+        end
+        barrier()
     end
-    barrier()
-    if (i <= 64)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 64])
-    end
-    barrier()
-    if (i <= 32)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 32])
-    end
-    barrier()
-    if (i <= 16)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 16])
-    end
-    barrier()
-    if (i <= 8)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 8])
-    end
-    barrier()
-    if (i <= 4)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 4])
-    end
-    barrier()
-    if (i <= 2)
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 2])
-    end
-    barrier()
+
     if (i == 1)
         shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
         ret[1] = shared_mem[1]
@@ -323,31 +288,24 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     shared_mem = oneLocalArray(eltype(ret), 16 * 16)
     i = get_local_id(0)
     j = get_local_id(1)
-    ii = i
-    jj = j
 
     tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
     if M > 16 && N > 16
-        while ii <= M
-            jj = get_local_id(1)
-            while jj <= N
+        for ii in i:16:M
+            for jj in j:16:N
                 tmp = op(tmp, @inbounds red[ii, jj])
-                jj += 16
             end
-            ii += 16
         end
     elseif M > 16
-        while ii <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            ii += 16
+        for ii in i:16:M
+            tmp = op(tmp, @inbounds red[ii, j])
         end
     elseif N > 16
-        while jj <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            jj += 16
+        for jj in j:16:N
+            tmp = op(tmp, @inbounds red[i, jj])
         end
     elseif M <= 16 && N <= 16
         if i <= M && j <= N
