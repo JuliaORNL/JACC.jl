@@ -305,13 +305,21 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
     end
     sync_threads()
 
-    tn = div(shmem_length, 2)
-    while tn > 1
-        if (ti <= tn)
-            shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
+    #tn = div(shmem_length, 2)
+    #while tn > 1
+    #    if (ti <= tn)
+    #        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
+    #    end
+    #    sync_threads()
+    #    tn = div(tn, 2)
+    #end
+    num_iters = floor(Int, log2(shmem_length))
+    for s in 1:(num_iters - 1)
+        tn = div(shmem_length, 2^s)
+        if ti <= tn
+             shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
         end
         sync_threads()
-        tn = div(tn, 2)
     end
 
     if ti == 1
@@ -329,23 +337,34 @@ function reduce_kernel_cuda(N, op, red, ret)
     ii = i
     tmp = ret[1]
     if N > shmem_length
-        while ii <= N
+        for ii in i:shmem_length:N
             tmp = op(tmp, @inbounds red[ii])
-            ii += shmem_length
         end
+        #while ii <= N
+        #    tmp = op(tmp, @inbounds red[ii])
+        #    ii += shmem_length
+        #end
     elseif (i <= N)
         tmp = @inbounds red[i]
     end
     shared_mem[i] = tmp
     sync_threads()
 
-    tn = div(shmem_length, 2)
-    while tn > 1
+    #tn = div(shmem_length, 2)
+    #while tn > 1
+    #    if i <= tn
+    #        shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
+    #    end
+    #    sync_threads()
+    #    tn = div(tn, 2)
+    #end
+    num_iters = floor(Int, log2(shmem_length))
+    for s in 1:(num_iters - 1)
+        tn = div(shmem_length, 2^s)
         if i <= tn
             shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
         end
         sync_threads()
-        tn = div(tn, 2)
     end
 
     if i == 1
@@ -419,23 +438,34 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
     shared_mem[sid] = tmp
 
     if M > 16 && N > 16
-        while ii <= M
-            jj = threadIdx().y
-            while jj <= N
+        #while ii <= M
+        #    jj = threadIdx().y
+        #    while jj <= N
+        #        tmp = op(tmp, @inbounds red[ii, jj])
+        #        jj += 16
+        #    end
+        #    ii += 16
+        #end
+        for ii in i:16:M
+            for jj in j:16:N
                 tmp = op(tmp, @inbounds red[ii, jj])
-                jj += 16
             end
-            ii += 16
         end
     elseif M > 16
-        while ii <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            ii += 16
+        #while ii <= N
+        #    tmp = op(tmp, @inbounds red[ii, jj])
+        #    ii += 16
+        #end
+        for ii in i:16:M
+            tmp = op(tmp, @inbounds red[ii, j])
         end
     elseif N > 16
-        while jj <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            jj += 16
+        #while jj <= N
+        #    tmp = op(tmp, @inbounds red[ii, jj])
+        #    jj += 16
+        #end
+        for jj in j:16:N
+            tmp = op(tmp, @inbounds red[i, jj])
         end
     elseif M <= 16 && N <= 16
         if i <= M && j <= N
