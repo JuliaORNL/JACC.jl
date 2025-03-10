@@ -5,7 +5,7 @@ authors = [
     "williamfgc <williamfgc@yahoo.com>",
     "PhilipFackler <facklerpw@ornl.gov>"
 ]
-version = "0.2.1"
+version = "0.3.0"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
@@ -23,10 +23,10 @@ CUDAExt = ["CUDA"]
 oneAPIExt = ["oneAPI"]
 
 [compat]
-AMDGPU = "1.1.6"
+AMDGPU = "1"
 Atomix = "1.0.1"
 CUDA = "5"
 Pkg = "1.11.0"
 Preferences = "1.4.0"
 julia = "1.9, 1.10, 1.11"
-oneAPI = "1.6.1"
+oneAPI = "1"

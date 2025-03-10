@@ -1,7 +1,6 @@
 module JACCTests
 
 import JACC
-JACC.@init_backend
 using ReTest
 
 @static if JACC.backend == "cuda"
