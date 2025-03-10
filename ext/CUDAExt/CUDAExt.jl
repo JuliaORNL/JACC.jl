@@ -305,13 +305,13 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
     end
     sync_threads()
 
-    tn = div(shmem_length, 2)
-    while tn > 1
+    max_pwr = floor(Int, log2(shmem_length)) - 1
+    for p in (max_pwr:-1:1)
+        tn = 2^p
         if (ti <= tn)
             shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
         end
         sync_threads()
-        tn = div(tn, 2)
     end
 
     if ti == 1
@@ -329,9 +329,8 @@ function reduce_kernel_cuda(N, op, red, ret)
     ii = i
     tmp = ret[1]
     if N > shmem_length
-        while ii <= N
+        for ii in i:shmem_length:N
             tmp = op(tmp, @inbounds red[ii])
-            ii += shmem_length
         end
     elseif (i <= N)
         tmp = @inbounds red[i]
@@ -339,13 +338,13 @@ function reduce_kernel_cuda(N, op, red, ret)
     shared_mem[i] = tmp
     sync_threads()
 
-    tn = div(shmem_length, 2)
-    while tn > 1
+    max_pwr = floor(Int, log2(shmem_length)) - 1
+    for p in (max_pwr:-1:1)
+        tn = 2^p
         if i <= tn
             shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
         end
         sync_threads()
-        tn = div(tn, 2)
     end
 
     if i == 1
@@ -411,31 +410,24 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
     shared_mem = CuDynamicSharedArray(eltype(ret), 16 * 16)
     i = threadIdx().x
     j = threadIdx().y
-    ii = i
-    jj = j
 
     tmp = ret[1]
     sid = ((i - 1) * 16) + j
     shared_mem[sid] = tmp
 
     if M > 16 && N > 16
-        while ii <= M
-            jj = threadIdx().y
-            while jj <= N
+        for ii in i:16:M
+            for jj in j:16:N
                 tmp = op(tmp, @inbounds red[ii, jj])
-                jj += 16
             end
-            ii += 16
         end
     elseif M > 16
-        while ii <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            ii += 16
+        for ii in i:16:M
+            tmp = op(tmp, @inbounds red[ii, j])
         end
     elseif N > 16
-        while jj <= N
-            tmp = op(tmp, @inbounds red[ii, jj])
-            jj += 16
+        for jj in j:16:N
+            tmp = op(tmp, @inbounds red[i, jj])
         end
     elseif M <= 16 && N <= 16
         if i <= M && j <= N
