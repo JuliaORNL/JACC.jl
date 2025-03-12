@@ -37,10 +37,10 @@ function JACC.parallel_for(::CUDABackend, N::Integer, f::Callable, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda, kargs)
     threads = min(N, maxThreads)
     blocks = ceil(Int, N / threads)
-    shmem_size = attribute(
-        device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    #shmem_size = attribute(
+    #    device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     CUDA.@sync kernel(
-        kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
+        kargs...; threads = threads, blocks = blocks)
 end
 
 function JACC.parallel_for(
@@ -189,10 +189,10 @@ function JACC.parallel_for(
     Lblocks = ceil(Int, L / Lthreads)
     Mblocks = ceil(Int, M / Mthreads)
     Nblocks = ceil(Int, N / Nthreads)
-    shmem_size = attribute(
-        device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    #shmem_size = attribute(
+    #    device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     CUDA.@sync @cuda threads=(Lthreads, Mthreads, Nthreads) blocks=(
-        Lblocks, Mblocks, Nblocks) shmem=shmem_size _parallel_for_cuda_LMN(
+        Lblocks, Mblocks, Nblocks)  _parallel_for_cuda_LMN(
         (L, M, N), f, x...)
 end
 
