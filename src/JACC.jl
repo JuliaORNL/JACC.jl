@@ -47,9 +47,9 @@ launch_spec(; kw...) = LaunchSpec{typeof(default_backend())}(; kw...)
 
 default_float(::Any) = Float64
 
-function shared(x::Base.Array{T, N}) where {T, N}
-    return x
-end
+shared(x::AbstractArray) = shared(default_backend(), x)
+
+sync_workgroup() = sync_workgroup(default_backend())
 
 array_type() = array_type(default_backend())
 

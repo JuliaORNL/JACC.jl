@@ -105,4 +105,6 @@ JACC.array_type(::ThreadsBackend) = Base.Array
 
 JACC.array(::ThreadsBackend, x::Base.Array) = x
 
+JACC.shared(::ThreadsBackend, x::AbstractArray) = x
+
 end
