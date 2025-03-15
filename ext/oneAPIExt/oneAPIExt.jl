@@ -23,7 +23,7 @@ end
 function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Callable, x...)
     maxPossibleItems = 256
     items = min(N, maxPossibleItems)
-    groups = ceil(Int, N / items)
+    groups = cld(N, items)
     oneAPI.@sync @oneapi items=items groups=groups _parallel_for_oneapi(
         N, f, x...)
 end
@@ -35,7 +35,7 @@ function JACC.parallel_for(
         spec.threads = min(N, maxPossibleItems)
     end
     if spec.blocks == 0
-        spec.blocks = ceil(Int, N / spec.threads)
+        spec.blocks = cld(N, spec.threads)
     end
     @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi(
         N, f, x...)
@@ -49,8 +49,8 @@ function JACC.parallel_for(
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
+    Mgroups = cld(M, Mitems)
+    Ngroups = cld(N, Nitems)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_for_oneapi_MN(
         (M, N),
         f, x...)
@@ -65,8 +65,8 @@ function JACC.parallel_for(
         spec.threads = (Mitems, Nitems)
     end
     if spec.blocks == 0
-        Mgroups = ceil(Int, M / spec.threads[1])
-        Ngroups = ceil(Int, N / spec.threads[2])
+        Mgroups = cld(M, spec.threads[1])
+        Ngroups = cld(N, spec.threads[2])
         spec.blocks = (Mgroups, Ngroups)
     end
     @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi_MN(
@@ -83,9 +83,9 @@ function JACC.parallel_for(
     Litems = min(L, maxPossibleItems)
     Mitems = min(M, maxPossibleItems)
     Nitems = 1
-    Lgroups = ceil(Int, L / Litems)
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
+    Lgroups = cld(L, Litems)
+    Mgroups = cld(M, Mitems)
+    Ngroups = cld(N, Nitems)
     oneAPI.@sync @oneapi items=(Litems, Mitems, Nitems) groups=(
         Lgroups, Mgroups, Ngroups) _parallel_for_oneapi_LMN((L, M, N),
         f, x...)
@@ -101,9 +101,9 @@ function JACC.parallel_for(
         spec.threads = (Litems, Mitems, Nitems)
     end
     if spec.blocks == 0
-        Lgroups = ceil(Int, L / spec.threads[1])
-        Mgroups = ceil(Int, M / spec.threads[2])
-        Ngroups = ceil(Int, N / spec.threads[3])
+        Lgroups = cld(L, spec.threads[1])
+        Mgroups = cld(M, spec.threads[2])
+        Ngroups = cld(N, spec.threads[3])
         spec.blocks = (Lgroups, Mgroups, Ngroups)
     end
     @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_for_oneapi_LMN(
@@ -118,14 +118,40 @@ function JACC.parallel_reduce(
         ::oneAPIBackend, N::Integer, op, f::Callable, x...; init)
     numItems = 256
     items = numItems
-    groups = ceil(Int, N / items)
+    groups = cld(N, items)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
     rret = oneAPI.oneArray([init])
     oneAPI.@sync @oneapi items=items groups=groups _parallel_reduce_oneapi(
-        N, op, ret, f, x...)
+        Val(items), N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
-        groups, op, ret, rret)
+        Val(items), groups, op, ret, rret)
     return Base.Array(rret)[]
+end
+
+function JACC.parallel_reduce(
+        spec::LaunchSpec{oneAPIBackend}, N::Integer, op, f::Callable, x...; init)
+    if spec.threads != 0
+        @warn "JACC.parallel_reduce: Ignoring threads spec: $(spec.threads)"
+    end
+    numItems = 256
+    spec.threads = numItems
+    if spec.blocks != 0
+        @warn "JACC.parallel_reduce: Ignoring blocks spec: $(spec.blocks)"
+    end
+    spec.blocks = cld(N, spec.threads)
+    ret = fill!(oneAPI.oneArray{typeof(init)}(undef, spec.blocks), init)
+    rret = oneAPI.oneArray([init])
+    if spec.shmem_size == 0
+        spec.shmem_size = spec.threads * sizeof(init)
+    end
+    @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_reduce_oneapi(
+        Val(spec.threads), N, op, ret, f, x...)
+    @oneapi items=spec.threads groups=1 queue=spec.stream reduce_kernel_oneapi(
+        Val(spec.threads), spec.blocks, op, ret, rret)
+    if spec.sync
+        oneAPI.synchronize(spec.stream)
+    end
+    return rret
 end
 
 function JACC.parallel_reduce(
@@ -133,8 +159,8 @@ function JACC.parallel_reduce(
     numItems = 16
     Mitems = numItems
     Nitems = numItems
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
+    Mgroups = cld(M, Mitems)
+    Ngroups = cld(N, Nitems)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
     rret = oneAPI.oneArray([init])
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
@@ -142,6 +168,33 @@ function JACC.parallel_reduce(
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
         (Mgroups, Ngroups), op, ret, rret)
     return Base.Array(rret)[]
+end
+
+function JACC.parallel_reduce(
+        spec::LaunchSpec{oneAPIBackend}, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
+    if spec.threads != 0
+        @warn "JACC.parallel_reduce: Ignoring threads spec: $(spec.threads)"
+    end
+    numItems = 16
+    Mitems = numItems
+    Nitems = numItems
+    spec.threads = (Mitems, Nitems)
+    if spec.blocks != 0
+        @warn "JACC.parallel_reduce: Ignoring blocks spec: $(spec.blocks)"
+    end
+    Mgroups = cld(M, spec.threads[1])
+    Ngroups = cld(N, spec.threads[2])
+    spec.blocks = (Mgroups, Ngroups)
+    ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
+    rret = oneAPI.oneArray([init])
+    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) queue=spec.stream _parallel_reduce_oneapi_MN(
+        (M, N), op, ret, f, x...)
+    @oneapi items=(Mitems, Nitems) groups=(1, 1) queue=spec.stream reduce_kernel_oneapi_MN(
+        (spec.blocks[1], spec.blocks[2]), op, ret, rret)
+    if spec.sync
+        oneAPI.synchronize(spec.stream)
+    end
+    return rret
 end
 
 function _parallel_for_oneapi(N, f, x...)
@@ -171,8 +224,8 @@ function _parallel_for_oneapi_LMN((L, M, N), f, x...)
     return nothing
 end
 
-function _parallel_reduce_oneapi(N, op, ret, f, x...)
-    shmem_length = 256
+function _parallel_reduce_oneapi(
+        ::Val{shmem_length}, N, op, ret, f, x...) where {shmem_length}
     shared_mem = oneLocalArray(eltype(ret), shmem_length)
     i = get_global_id(0)
     ti = get_local_id(0)
@@ -201,8 +254,8 @@ function _parallel_reduce_oneapi(N, op, ret, f, x...)
     return nothing
 end
 
-function reduce_kernel_oneapi(N, op, red, ret)
-    shmem_length = 256
+function reduce_kernel_oneapi(
+        ::Val{shmem_length}, N, op, red, ret) where {shmem_length}
     shared_mem = oneLocalArray(eltype(ret), shmem_length)
     i = get_global_id(0)
     ii = i
