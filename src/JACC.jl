@@ -91,8 +91,17 @@ function parallel_reduce(N::Integer, f::Callable, x...)
     return parallel_reduce(N, +, f, x...; init = default_init(+))
 end
 
+function parallel_reduce(spec::LaunchSpec, N::Integer, f::Callable, x...)
+    return parallel_reduce(spec, N, +, f, x...; init = default_init(+))
+end
+
 function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
     return parallel_reduce((M, N), +, f, x...; init = default_init(+))
+end
+
+function parallel_reduce(
+        spec::LaunchSpec, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return parallel_reduce(spec, (M, N), +, f, x...; init = default_init(+))
 end
 
 array_size(a::AbstractArray) = size(a)
@@ -106,8 +115,17 @@ function parallel_reduce(
         op::Callable, a::AbstractArray; init = default_init(eltype(a), op))
     return parallel_reduce(array_size(a), op, _elem_access(a), a; init = init)
 end
+function parallel_reduce(
+        spec::LaunchSpec, op::Callable, a::AbstractArray; init = default_init(
+            eltype(a), op))
+    return parallel_reduce(
+        spec, array_size(a), op, _elem_access(a), a; init = init)
+end
 
 parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a; kw...)
+function parallel_reduce(spec::LaunchSpec, a::AbstractArray; kw...)
+    parallel_reduce(spec, +, a; kw...)
+end
 
 include("threads/threads.jl")
 

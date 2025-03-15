@@ -169,9 +169,9 @@ function JACC.parallel_for(
     Lthreads = min(L, numThreads)
     Mthreads = min(M, numThreads)
     Nthreads = 1
-    Lblocks = ceil(Int, L / Lthreads)
-    Mblocks = ceil(Int, M / Mthreads)
-    Nblocks = ceil(Int, N / Nthreads)
+    Lblocks = cld(L, Lthreads)
+    Mblocks = cld(M, Mthreads)
+    Nblocks = cld(N, Nthreads)
     # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
     # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
     shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
@@ -192,9 +192,9 @@ function JACC.parallel_for(
         spec.threads = (Lthreads, Mthreads, Nthreads)
     end
     if spec.blocks == 0
-        Lblocks = ceil(Int, L / spec.threads[1])
-        Mblocks = ceil(Int, M / spec.threads[2])
-        Nblocks = ceil(Int, N / spec.threads[3])
+        Lblocks = cld(L, spec.threads[1])
+        Mblocks = cld(M, spec.threads[2])
+        Nblocks = cld(N, spec.threads[3])
         spec.blocks = (Lblocks, Mblocks, Nblocks)
     end
     if spec.shmem_size == 0
@@ -224,7 +224,7 @@ function JACC.parallel_reduce(
     threads = min(threads1, threads2, 512)
     blocks = cld(N, threads)
 
-    shmem_size = threads * sizeof(Float64)
+    shmem_size = threads * sizeof(init)
 
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
 
@@ -240,21 +240,98 @@ function JACC.parallel_reduce(
 end
 
 function JACC.parallel_reduce(
+        spec::LaunchSpec{AMDGPUBackend}, N::Integer, op, f::Callable, x...; init)
+    ret_inst = AMDGPU.ROCArray{typeof(init)}(undef, 0)
+    kernel1 = @roc launch=false _parallel_reduce_amdgpu(
+        N, op, ret_inst, f, x...)
+    config1 = AMDGPU.launch_configuration(kernel1)
+    threads1 = config1.groupsize
+
+    rret = AMDGPU.ROCArray([init])
+    kernel2 = @roc launch=false reduce_kernel_amdgpu(1, op, ret_inst, rret)
+    config2 = AMDGPU.launch_configuration(kernel2)
+    threads2 = config2.groupsize
+
+    if spec.threads != 0
+        @warn "JACC.parallel_reduce: Ignoring threads spec: $(spec.threads)"
+    end
+    spec.threads = min(threads1, threads2, 512)
+    if spec.blocks != 0
+        @warn "JACC.parallel_reduce: Ignoring blocks spec: $(spec.blocks)"
+    end
+    spec.blocks = cld(N, spec.threads)
+
+    if spec.shmem_size != 0
+        @warn "JACC.parallel_reduce: Ignoring shmem_size spec: $(spec.shmem_size)"
+    end
+    spec.shmem_size = spec.threads * sizeof(init)
+
+    ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks), init)
+
+    kernel1(
+        N, op, ret, f, x...; groupsize = spec.threads,
+        gridsize = spec.blocks, shmem = spec.shmem_size, stream = spec.stream)
+    kernel2(spec.blocks, op, ret, rret; groupsize = spec.threads,
+        gridsize = 1, shmem = spec.shmem_size, stream = spec.stream)
+
+    if spec.sync
+        AMDGPU.synchronize(spec.stream)
+    end
+
+    return rret
+end
+
+function JACC.parallel_reduce(
         ::AMDGPUBackend, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
     numThreads = 16
     Mthreads = numThreads
     Nthreads = numThreads
-    Mblocks = ceil(Int, M / Mthreads)
-    Nblocks = ceil(Int, N / Nthreads)
+    Mblocks = cld(M, Mthreads)
+    Nblocks = cld(N, Nthreads)
+    shmem_size = 16 * 16 * sizeof(init)
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
     rret = AMDGPU.ROCArray([init])
-    @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) _parallel_reduce_amdgpu_MN(
+    @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) shmem=shmem_size _parallel_reduce_amdgpu_MN(
         (M, N), op, ret, f, x...)
     AMDGPU.synchronize()
-    @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) reduce_kernel_amdgpu_MN(
+    @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) shmem=shmem_size reduce_kernel_amdgpu_MN(
         (Mblocks, Nblocks), op, ret, rret)
     AMDGPU.synchronize()
     return Base.Array(rret)[]
+end
+
+function JACC.parallel_reduce(
+        spec::LaunchSpec{AMDGPUBackend}, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
+    if spec.threads != 0
+        @warn "JACC.parallel_reduce: Ignoring threads spec: $(spec.threads)"
+    end
+    numThreads = 16
+    Mthreads = numThreads
+    Nthreads = numThreads
+    spec.threads = (Mthreads, Nthreads)
+    if spec.blocks != 0
+        @warn "JACC.parallel_reduce: Ignoring blocks spec: $(spec.blocks)"
+    end
+    Mblocks = cld(M, spec.threads[1])
+    Nblocks = cld(N, spec.threads[2])
+    spec.blocks = (Mblocks, Nblocks)
+    if spec.shmem_size != 0
+        @warn "JACC.parallel_reduce: Ignoring shmem_size spec: $(spec.shmem_size)"
+    end
+    spec.shmem_size = 16 * 16 * sizeof(init)
+
+    ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks), init)
+    rret = AMDGPU.ROCArray([init])
+    @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_reduce_amdgpu_MN(
+        (M, N), op, ret, f, x...)
+    @roc groupsize=spec.threads gridsize=(1, 1) shmem=spec.shmem_size stream=spec.stream reduce_kernel_amdgpu_MN(
+        spec.blocks, op, ret, rret)
+
+    if spec.sync
+        AMDGPU.synchronize(spec.stream)
+    end
+
+    return rret
 end
 
 function _parallel_for_amdgpu(N, f, x...)
