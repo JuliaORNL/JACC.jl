@@ -321,7 +321,7 @@ function JACC.parallel_reduce(
     if spec.shmem_size != 0
         @warn "JACC.parallel_reduce: Ignoring shmem_size spec: $(spec.shmem_size)"
     end
-    shmem_size = 16 * 16 * sizeof(init)
+    spec.shmem_size = 16 * 16 * sizeof(init)
 
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, spec.blocks), init)
     rret = CUDA.CuArray([init])
