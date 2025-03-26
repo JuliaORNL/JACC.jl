@@ -1,3 +1,4 @@
+import oneAPI
 
 @testset "TestBackend" begin
     @test JACC.backend == "oneapi"

@@ -1,3 +1,4 @@
+import CUDA
 
 @testset "TestBackend" begin
     @test JACC.backend == "cuda"
