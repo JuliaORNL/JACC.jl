@@ -72,33 +72,81 @@ function JACC.parallel_for(
     parallel_for(ThreadsBackend(), (L, M, N), f, x...)
 end
 
-function JACC.parallel_reduce(
-        ::ThreadsBackend, N::Integer, op, f::Callable, x...; init)
-    ret = init
-    tmp = fill(init, Threads.nthreads())
+mutable struct ThreadsReduceWorkspace{T} <: JACC.ReduceWorkspace
+    tmp::Base.Vector{T}
+    ret::Vector{T}
+end
+
+function JACC.reduce_workspace(::ThreadsBackend, init::T) where {T}
+    ThreadsReduceWorkspace{T}(fill(init, Threads.nthreads()), [init])
+end
+
+JACC.get_result(wk::ThreadsReduceWorkspace) = wk.ret[]
+
+function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
+        N::Integer, f::Callable, x...)
+    wk = reducer.workspace
+    fill!(wk.tmp, reducer.init)
+    wk.ret[] = reducer.init
+    op = reducer.op
     @maybe_threaded for i in 1:N
-        tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, x...))
+        tid = Threads.threadid()
+        @inbounds wk.tmp[tid] = op.(wk.tmp[tid], f(i, x...))
     end
     for i in 1:Threads.nthreads()
-        ret = op.(ret, tmp[i])
+        @inbounds wk.ret[] = op.(wk.ret[], wk.tmp[i])
     end
-    return ret
+    return nothing
 end
 
 function JACC.parallel_reduce(
-        ::ThreadsBackend, (M, N)::Tuple{Integer, Integer}, op, f::Callable, x...; init)
-    ret = init
-    tmp = fill(init, Threads.nthreads())
+        ::ThreadsBackend, N::Integer, op, f::Callable, x...; init)
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
+        dims = N, op = op, init = init)
+    reducer(f, x...)
+    return JACC.get_result(reducer)
+end
+
+function JACC.parallel_reduce(
+        ::LaunchSpec{ThreadsBackend}, N::Integer, op, f::Callable, x...; init)
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
+        dims = N, op = op, init = init)
+    reducer(f, x...)
+    return reducer.workspace.ret
+end
+
+function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
+        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+    wk = reducer.workspace
+    fill!(wk.tmp, reducer.init)
+    wk.ret[] = reducer.init
+    op = reducer.op
     @maybe_threaded for j in 1:N
         for i in 1:M
-            tmp[Threads.threadid()] = op.(
-                tmp[Threads.threadid()], f(i, j, x...))
+            tid = Threads.threadid()
+            @inbounds wk.tmp[tid] = op.(wk.tmp[tid], f(i, j, x...))
         end
     end
     for i in 1:Threads.nthreads()
-        ret = op.(ret, tmp[i])
+        @inbounds wk.ret[] = op.(wk.ret[], wk.tmp[i])
     end
-    return ret
+    return nothing
+end
+
+function JACC.parallel_reduce(
+        ::ThreadsBackend, (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
+        dims = (M, N), op = op, init = init)
+    reducer(f, x...)
+    return JACC.get_result(reducer)
+end
+
+function JACC.parallel_reduce(
+        ::LaunchSpec{ThreadsBackend}, (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
+        dims = (M, N), op = op, init = init)
+    reducer(f, x...)
+    return reducer.workspace.ret
 end
 
 JACC.array_type(::ThreadsBackend) = Base.Array

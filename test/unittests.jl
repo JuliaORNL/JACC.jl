@@ -74,6 +74,7 @@ end
     @test zeros(N)≈Base.Array(x) rtol=1e-5
 end
 
+# using Cthulhu
 @testset "AtomicCounter" begin
     function axpy_counter!(i, alpha, x, y, counter)
         @inbounds x[i] += alpha * y[i]
@@ -90,14 +91,35 @@ end
     JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
 
     @test Base.Array(counter)[1] == N
+
+    # TODO: clean this up
+    # counter = JACC.zeros((1,1,1))
+    # try
+    #     JACC.parallel_for(N,
+    #         (i, counter) -> begin
+    #             JACC.@atomic counter[1,1,1] += 1.0
+    #         end,
+    #         counter)
+    # catch err
+    #     code_warntype(err; interactive = true)
+    # end
+    # @test Base.Array(counter)[1,1,1] == N
 end
 
 @testset "reduce" begin
     a = JACC.array([1 for i in 1:10])
     @test JACC.parallel_reduce(a) == 10
     @test JACC.parallel_reduce(min, a) == 1
+    reducer = JACC.reducer(; dims = JACC.array_size(a), op = +)
+    reducer.spec = JACC.launch_spec(; sync = true)
+    reducer(a)
+    @test JACC.get_result(reducer) == 10
     a2 = JACC.ones(Int, (2, 2))
     @test JACC.parallel_reduce(min, a2) == 1
+    reducer = JACC.reducer(; dims = JACC.array_size(a2), op = min)
+    reducer.spec = JACC.launch_spec(; sync = true)
+    reducer(a2)
+    @test JACC.get_result(reducer) == 1
 
     SIZE = 1000
     ah = randn(FloatType, SIZE)
