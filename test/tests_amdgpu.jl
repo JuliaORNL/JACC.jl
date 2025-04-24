@@ -1,3 +1,4 @@
+import AMDGPU
 
 @testset "TestBackend" begin
     @test JACC.backend == "amdgpu"
