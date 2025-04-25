@@ -1,4 +1,18 @@
 
+function seq_axpy(N, alpha, x, y)
+    for i in 1:N
+        @inbounds x[i] += alpha * y[i]
+    end
+end
+
+function seq_dot(N, x, y)
+    r = 0.0
+    for i in 1:N
+        @inbounds r += x[i] * y[i]
+    end
+    return r
+end
+
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
@@ -20,12 +34,6 @@ end
 @testset "AXPY" begin
     function axpy(i, alpha, x, y)
         @inbounds x[i] += alpha * y[i]
-    end
-
-    function seq_axpy(N, alpha, x, y)
-        @inbounds for i in 1:N
-            x[i] += alpha * y[i]
-        end
     end
 
     alpha = 2.5
@@ -230,20 +238,6 @@ end
 end
 
 @testset "JACC.BLAS" begin
-    function seq_axpy(N, alpha, x, y)
-        for i in 1:N
-            @inbounds x[i] += alpha * y[i]
-        end
-    end
-
-    function seq_dot(N, x, y)
-        r = 0.0
-        for i in 1:N
-            @inbounds r += x[i] * y[i]
-        end
-        return r
-    end
-
     x = ones(1_000)
     y = ones(1_000)
     jx = JACC.ones(1_000)
@@ -543,4 +537,67 @@ end
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
     @test f2≈Base.Array(df2) rtol=1e-1
+end
+
+@testset "MultiOld" begin
+    # Unidimensional arrays
+    function axpy(dev_id, i, alpha, x, y)
+        x[dev_id][i] += alpha * y[dev_id][i]
+    end
+
+    function dot(dev_id, i, x, y)
+        return x[dev_id][i] * y[dev_id][i]
+    end
+
+    SIZE = 10
+    x = round.(rand(Float64, SIZE) * 100)
+    y = round.(rand(Float64, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array_old(x)
+    dy = JACC.Multi.array_old(y)
+    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx[1], dy[1])
+    x_expected = x
+    seq_axpy(SIZE, alpha, x_expected, y)
+    @test Base.Array(dx[1]...)≈x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce(SIZE, dot, dx[1], dy[1])
+    @test res ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
+
+    # # Multidimensional arrays
+    # function axpy(dev_id, i, j, alpha, x, y)
+    #     x[dev_id][i,j] = x[dev_id][i,j] + alpha * y[i,j]
+    # end
+    # function dot(dev_id, i, j, x, y)
+    #     return x[dev_id][i,j] * y[dev_id][i,j]
+    # end
+    # SIZE = 1_000
+    # x = round.(rand(Float64, SIZE, SIZE) * 100)
+    # y = round.(rand(Float64, SIZE, SIZE) * 100)
+    # alpha = 2.5
+    # dx = JACC.Multi.array(x)
+    # dy = JACC.Multi.array(y)
+    # JACC.Multi.parallel_for((SIZE,SIZE), axpy, alpha, dx, dy)
+    # res = JACC.Multi.parallel_reduce((SIZE,SIZE), dot, dx, dy)
+end
+
+@testset "Multi" begin
+    function axpy(dev_id, i, alpha, x, y)
+        x[i] += alpha * y[i]
+    end
+
+    function dot(dev_id, i, x, y)
+        return x[i] * y[i]
+    end
+
+    SIZE = 10
+    x = round.(rand(Float64, SIZE) * 100)
+    y = round.(rand(Float64, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array(x)
+    dy = JACC.Multi.array(y)
+    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx, dy)
+    x_expected = x
+    seq_axpy(SIZE, alpha, x_expected, y)
+    @test Base.Array(dx)≈x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce(SIZE, dot, dx, dy)
+    @test res ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
 end

@@ -3,11 +3,156 @@ module Multi
 import Base: Callable
 using JACC, CUDA
 
+@inline ndevices() = length(devices())
+
 function JACC.Multi.ndev(::CUDABackend)
-    return length(devices())
+    return ndevices()
 end
 
-function JACC.Multi.array(::CUDABackend, x::Base.Array{T, N}) where {T, N}
+struct ArrayPart{T, N}
+    a::CuDeviceArray{T, N, CUDA.AS.Global}
+    dev_id::Integer
+    ghost_dims::Integer
+end
+
+@inline size(p::ArrayPart) = size(p.a)
+@inline getindex(p::ArrayPart, i) = getindex(p.a, i)
+@inline setindex!(p::ArrayPart, v, i) = setindex!(p.a, v, i)
+
+struct MultiArray{T,N}
+    a1::Vector{ArrayPart{T, N}}
+    a2::Vector{CuArray{T,N}}
+    ghost_dims::Integer
+end
+
+@inline process_param(x, dev_id) = x
+@inline process_param(x::MultiArray, dev_id) = x.a[dev_id]
+
+function make_multi_array(x::Base.Vector{T}) where {T}
+    ndev = ndevices()
+    device!(0)
+    total_length = length(x)
+    partlen = cld(total_length, ndev)
+    parts = Vector{CuVector{T}}(undef, ndev)
+    devparts = Vector{ArrayPart{T, 1}}(undef, ndev)
+
+    for i in 1:ndev
+        device!(i - 1)
+        parts[i] = CuArray(x[(((i - 1) * partlen) + 1):(i * partlen)])
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, 0)
+    end
+
+    device!(0)
+    return MultiArray(devparts, parts, 0)
+end
+
+function make_multi_array(x::Base.Vector{T}, ghost_dims) where {T}
+    ndev = ndevices()
+    device!(0)
+    total_length = length(x)
+    partlen = cld(total_length, ndev)
+    parts = Vector{CuVector{T}}(undef, ndev)
+    devparts = Vector{ArrayPart{T, 1}}(undef, ndev)
+    ng = ghost_dims
+
+    for i in 1:ndev
+        device!(i - 1)
+        if i == 1
+            parts[i] = CuArray(x[((i - 1) * partlen + 1):(i * partlen + ng)])
+        elseif i == ndev
+            parts[i] = CuArray(x[((i - 1) * partlen + 1 - ng):(i * partlen)])
+        else
+            parts[i] = CuArray(x[((i - 1) * partlen + 1 - ng):(i * partlen + ng)])
+        end
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ng)
+    end
+
+    device!(0)
+    return MultiArray(devparts, parts, ng)
+end
+
+function make_multi_array(x::Base.Matrix{T}) where {T}
+    ndev = ndevices()
+    device!(0)
+    total_length = size(x, 2)
+    partlen = cld(total_length, ndev)
+    parts = Vector{CuMatrix{T}}(undef, ndev)
+    devparts = Vector{ArrayPart{T, 2}}(undef, ndev)
+
+    for i in 1:ndev
+        device!(i - 1)
+        parts[i] = CuArray(x[:, (((i - 1) * partlen) + 1):(i * partlen)])
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, 0)
+    end
+
+    device!(0)
+    return MultiArray(devparts, parts, 0)
+end
+
+function make_multi_array(x::Base.Matrix{T}, ghost_dims) where {T}
+    ndev = ndevices()
+    device!(0)
+    total_length = size(x, 2)
+    partlen = cld(total_length, ndev)
+    parts = Vector{CuMatrix{T}}(undef, ndev)
+    devparts = Vector{ArrayPart{T, 2}}(undef, ndev)
+    ng = ghost_dims
+
+    for i in 1:ndev
+        device!(i - 1)
+        if i == 1
+            parts[i] = CuArray(x[:, ((i - 1) * partlen + 1):(i * partlen + ng)])
+        elseif i == ndev
+            parts[i] = CuArray(x[:, ((i - 1) * partlen + 1 - ng):(i * partlen)])
+        else
+            parts[i] = CuArray(x[:, ((i - 1) * partlen + 1 - ng):(i * partlen + ng)])
+        end
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ng)
+    end
+
+    device!(0)
+    return MultiArray(devparts, array_ret, ng)
+end
+
+function JACC.Multi.array(::CUDABackend, x::Base.Array; ghost_dims)
+    if ghost_dims == 0
+        return make_multi_array(x)
+    else
+        return make_multi_array(x, ghost_dims)
+    end
+end
+
+function JACC.Multi.ghost_shift(::CUDABackend, i::Integer, arr)
+    dev_id = device(arr)
+    if dev_id == 1
+        ind = i
+    elseif dev_id == ndev
+        ind = i + 1
+    else
+        ind = i + 1
+    end
+    return ind
+end
+
+function JACC.Multi.ghost_shift(
+        ::CUDABackend, dev_id::Integer, (i, j)::NTuple{2, Integer},
+        ndev::Integer)
+    ind = (0, 0)
+
+    if dev_id == 1
+        ind = (i, j)
+    elseif dev_id == ndev
+        ind = (i, j + 1)
+    else
+        ind = (i, j + 1)
+    end
+
+    return ind
+end
+
+
+
+function JACC.Multi.array_old(::CUDABackend, x::Base.Array{T, N}) where {T, N}
     ndev = length(devices())
     ret = Vector{Any}(undef, 2)
 
@@ -121,7 +266,7 @@ function JACC.Multi.copy(::CUDABackend, x::Vector{Any}, y::Vector{Any})
 
         for i in 1:ndev
             device!(i - 1)
-            synchronize()
+            CUDA.synchronize()
         end
 
     elseif ndims(x[2][1]) == 2
@@ -139,7 +284,7 @@ function JACC.Multi.copy(::CUDABackend, x::Vector{Any}, y::Vector{Any})
 
         for i in 1:ndev
             device!(i - 1)
-            synchronize()
+            CUDA.synchronize()
         end
     end
 
@@ -205,7 +350,7 @@ function JACC.Multi.gswap(::CUDABackend, x::Vector{Any})
 
         for i in 1:ndev
             device!(i - 1)
-            synchronize()
+            CUDA.synchronize()
         end
 
     elseif ndims(x[2][1]) == 2
@@ -240,7 +385,7 @@ function JACC.Multi.gswap(::CUDABackend, x::Vector{Any})
 
         for i in 1:ndev
             device!(i - 1)
-            synchronize()
+            CUDA.synchronize()
         end
     end
 
@@ -265,7 +410,7 @@ function JACC.Multi.gcopytoarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     device!(0)
@@ -289,7 +434,7 @@ function JACC.Multi.copytogarray(::CUDABackend, x::Vector{Any}, y::Vector{Any})
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     device!(0)
@@ -307,12 +452,12 @@ function JACC.Multi.parallel_for(::CUDABackend, N::Integer, f::Callable, x...)
         device!(i - 1)
         dev_id = i
         @cuda threads=threads blocks=blocks _multi_parallel_for_cuda(
-            N_multi, dev_id, f, x...)
+            N_multi, dev_id, f, process_param(x, dev_id)...)
     end
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     device!(0)
@@ -340,14 +485,14 @@ function JACC.Multi.parallel_reduce(
         device!(i - 1)
         dev_id = i
         @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _multi_parallel_reduce_cuda(
-            N_multi, dev_id, ret[i], f, x...)
+            N_multi, dev_id, ret[i], f, process_param(x, dev_id)...)
         @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) _multi_reduce_kernel_cuda(
             blocks, ret[i], rret[i])
     end
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     for i in 1:ndev
@@ -373,12 +518,12 @@ function JACC.Multi.parallel_for(::CUDABackend,
         device!(i - 1)
         dev_id = i
         @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _multi_parallel_for_cuda_MN(
-            M, N_multi, dev_id, f, x...)
+            M, N_multi, dev_id, f, process_param(x, dev_id)...)
     end
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     device!(0)
@@ -410,7 +555,7 @@ function JACC.Multi.parallel_reduce(::CUDABackend,
         @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
                                                                            16 *
                                                                            sizeof(Float64) _multi_parallel_reduce_cuda_MN(
-            (M, N_multi), dev_id, ret[i], f, x...)
+            (M, N_multi), dev_id, ret[i], f, process_param(x, dev_id)...)
 
         @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=16 * 16 *
                                                                sizeof(Float64) _multi_reduce_kernel_cuda_MN(
@@ -419,7 +564,7 @@ function JACC.Multi.parallel_reduce(::CUDABackend,
 
     for i in 1:ndev
         device!(i - 1)
-        synchronize()
+        CUDA.synchronize()
     end
 
     for i in 1:ndev

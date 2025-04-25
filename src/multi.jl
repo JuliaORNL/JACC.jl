@@ -7,8 +7,16 @@ function ndev()
     return ndev(JACC.default_backend())
 end
 
-function array(x::Base.Array{T, N}) where {T, N}
-    return array(JACC.default_backend(), x)
+function array(x::Base.Array; ghost_dims = 0)
+    return array(JACC.default_backend(), x; ghost_dims=ghost_dims)
+end
+
+function ghost_shift(idx::Union{Integer,NTuple{2,Integer}}, arr)
+    return ghost_shift(JACC.default_backend(), i, arr)
+end
+
+function array_old(x::Base.Array{T, N}) where {T, N}
+    return array_old(JACC.default_backend(), x)
 end
 
 function gArray(x::Base.Array{T, N}) where {T, N}

@@ -7,8 +7,16 @@ using JACC.ThreadsImpl: ThreadsBackend
 function JACC.Multi.ndev(::ThreadsBackend)
 end
 
-function JACC.Multi.array(::ThreadsBackend, x::Base.Array{T, N}) where {T, N}
+function JACC.Multi.array(::ThreadsBackend, x::Base.Array; ghost_dims)
     return x
+end
+
+function JACC.Multi.ghost_shift(::ThreadsBackend, idx, arr)
+    return idx
+end
+
+function JACC.Multi.array_old(::ThreadsBackend, x::Base.Array{T, N}) where {T, N}
+    return [[x]]
 end
 
 function JACC.Multi.gArray(::ThreadsBackend, x::Base.Array{T, N}) where {T, N}
@@ -34,18 +42,22 @@ end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
+    return JACC.parallel_for(ThreadsBackend(), N, (p...) -> f(1, p...), x...)
 end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return JACC.parallel_for(ThreadsBackend(), (M,N), (p...) -> f(1, p...), x...)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
+    return JACC.parallel_reduce(ThreadsBackend(), N, +, (p...) -> f(1, p...), x...; init = 0.0)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return JACC.parallel_reduce(ThreadsBackend(), (M,N), +, (p...) -> f(1, p...), x...; init = 0.0)
 end
 
 end
