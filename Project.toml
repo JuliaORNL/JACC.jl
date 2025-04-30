@@ -5,7 +5,7 @@ authors = [
     "williamfgc <williamfgc@yahoo.com>",
     "PhilipFackler <facklerpw@ornl.gov>"
 ]
-version = "0.3.1"
+version = "0.4.0"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
