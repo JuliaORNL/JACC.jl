@@ -7,12 +7,24 @@ function ndev()
     return ndev(JACC.default_backend())
 end
 
+function multi_array_type()
+    return multi_array_type(default_backend())
+end
+
 function array(x::Base.Array; ghost_dims = 0)
     return array(JACC.default_backend(), x; ghost_dims=ghost_dims)
 end
 
 function ghost_shift(idx::Union{Integer,NTuple{2,Integer}}, arr)
     return ghost_shift(JACC.default_backend(), i, arr)
+end
+
+function sync_ghost_elems(arr)
+    return sync_ghost_elems(JACC.default_backend(), arr)
+end
+
+function copy(dest, src)
+    return copy(JACC.default_backend(), dest, src)
 end
 
 function array_old(x::Base.Array{T, N}) where {T, N}
@@ -39,8 +51,8 @@ function copytogarray(x::Vector{Any}, y::Vector{Any})
     return copytogarray(JACC.default_backend(), x, y)
 end
 
-function copy(x::Vector{Any}, y::Vector{Any})
-    return copy(JACC.default_backend(), x, y)
+function copy_old(x::Vector{Any}, y::Vector{Any})
+    return copy_old(JACC.default_backend(), x, y)
 end
 
 function parallel_for(N::Integer, f::Callable, x...)
@@ -59,4 +71,19 @@ function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
     return parallel_reduce(JACC.default_backend(), (M, N), f, x...)
 end
 
+function parallel_for_old(N::Integer, f::Callable, x...)
+    return parallel_for_old(JACC.default_backend(), N, f, x...)
+end
+
+function parallel_for_old((M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return parallel_for_old(JACC.default_backend(), (M, N), f, x...)
+end
+
+function parallel_reduce_old(N::Integer, f::Callable, x...)
+    return parallel_reduce_old(JACC.default_backend(), N, f, x...)
+end
+
+function parallel_reduce_old((M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return parallel_reduce_old(JACC.default_backend(), (M, N), f, x...)
+end
 end # module Multi

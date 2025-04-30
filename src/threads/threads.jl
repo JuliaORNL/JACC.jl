@@ -1,7 +1,8 @@
 module ThreadsImpl
 
 import Base: Callable
-using JACC
+import JACC
+import JACC: LaunchSpec
 
 struct ThreadsBackend end
 

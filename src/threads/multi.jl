@@ -1,8 +1,8 @@
 module Multi
 
 import Base.Callable
-using JACC
-using JACC.ThreadsImpl: ThreadsBackend
+import JACC
+import JACC.ThreadsImpl: ThreadsBackend
 
 function JACC.Multi.ndev(::ThreadsBackend)
 end
@@ -10,6 +10,8 @@ end
 function JACC.Multi.array(::ThreadsBackend, x::Base.Array; ghost_dims)
     return x
 end
+
+JACC.Multi.multi_array_type(::ThreadsBackend) = Base.Array
 
 function JACC.Multi.ghost_shift(::ThreadsBackend, idx, arr)
     return idx

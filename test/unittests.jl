@@ -5,10 +5,28 @@ function seq_axpy(N, alpha, x, y)
     end
 end
 
+function seq_axpy(M, N, alpha, x, y)
+    for i in 1:M
+        for j in 1:N
+            @inbounds x[i,j] += alpha * y[i,j]
+        end
+    end
+end
+
 function seq_dot(N, x, y)
     r = 0.0
     for i in 1:N
         @inbounds r += x[i] * y[i]
+    end
+    return r
+end
+
+function seq_dot(M, N, x, y)
+    r = 0.0
+    for i in 1:M
+        for j in 1:N
+            @inbounds r += x[i,j] * y[i,j]
+        end
     end
     return r
 end
@@ -539,6 +557,7 @@ end
     @test f2≈Base.Array(df2) rtol=1e-1
 end
 
+using CUDA
 @testset "MultiOld" begin
     # Unidimensional arrays
     function axpy(dev_id, i, alpha, x, y)
@@ -549,45 +568,70 @@ end
         return x[dev_id][i] * y[dev_id][i]
     end
 
+    function copy_to_array(SIZE::Integer, ma::Vector{Any})
+        device!(0)
+        ndev = JACC.Multi.ndev()
+        partlen = cld(SIZE, ndev)
+        if ndims(ma[1]) == 2
+            ret = Base.Array{eltype(ma[1]),ndims(ma[1])}(undef, size(ma[1],1), partlen * ndev)
+        else
+            ret = Base.Array{eltype(ma[1]),ndims(ma[1])}(undef, partlen * ndev)
+        end
+        for i in 1:ndev
+            device!(i - 1)
+            if ndims(ma[i]) == 2
+                copyto!(ret, CartesianIndices((1:size(ma[i],1),(((i - 1) * partlen) + 1):(i*partlen))),
+                    ma[i], CartesianIndices(ma[i]))
+            else
+                copyto!(ret, (((i - 1) * partlen) + 1), ma[i], 1, partlen)
+            end
+        end
+        device!(0)
+        return ret
+    end
+
     SIZE = 10
     x = round.(rand(Float64, SIZE) * 100)
     y = round.(rand(Float64, SIZE) * 100)
     alpha = 2.5
     dx = JACC.Multi.array_old(x)
     dy = JACC.Multi.array_old(y)
-    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx[1], dy[1])
+    JACC.Multi.parallel_for_old(SIZE, axpy, alpha, dx[1], dy[1])
     x_expected = x
     seq_axpy(SIZE, alpha, x_expected, y)
-    @test Base.Array(dx[1]...)≈x_expected rtol=1e-1
-    res = JACC.Multi.parallel_reduce(SIZE, dot, dx[1], dy[1])
-    @test res ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
+    @test copy_to_array(SIZE, dx[2])≈x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce_old(SIZE, dot, dx[1], dy[1])
+    @test Base.Array(res)[] ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
 
-    # # Multidimensional arrays
-    # function axpy(dev_id, i, j, alpha, x, y)
-    #     x[dev_id][i,j] = x[dev_id][i,j] + alpha * y[i,j]
-    # end
-    # function dot(dev_id, i, j, x, y)
-    #     return x[dev_id][i,j] * y[dev_id][i,j]
-    # end
-    # SIZE = 1_000
-    # x = round.(rand(Float64, SIZE, SIZE) * 100)
-    # y = round.(rand(Float64, SIZE, SIZE) * 100)
-    # alpha = 2.5
-    # dx = JACC.Multi.array(x)
-    # dy = JACC.Multi.array(y)
-    # JACC.Multi.parallel_for((SIZE,SIZE), axpy, alpha, dx, dy)
-    # res = JACC.Multi.parallel_reduce((SIZE,SIZE), dot, dx, dy)
+    # Multidimensional arrays
+    function axpy_2d(dev_id, i, j, alpha, x, y)
+        x[dev_id][i,j] += alpha * y[dev_id][i,j]
+    end
+    function dot_2d(dev_id, i, j, x, y)
+        return x[dev_id][i,j] * y[dev_id][i,j]
+    end
+    SIZE = 10
+    x = round.(rand(Float64, SIZE, SIZE) * 100)
+    y = round.(rand(Float64, SIZE, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array_old(x)
+    dy = JACC.Multi.array_old(y)
+    JACC.Multi.parallel_for_old((SIZE,SIZE), axpy_2d, alpha, dx[1], dy[1])
+    x_expected = x
+    seq_axpy(SIZE, SIZE, alpha, x_expected, y)
+    @test copy_to_array(SIZE, dx[2]) ≈ x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce_old((SIZE,SIZE), dot_2d, dx[1], dy[1])
+    @test Base.Array(res)[] ≈ seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
 end
 
 @testset "Multi" begin
+    # Unidimensional arrays
     function axpy(dev_id, i, alpha, x, y)
         x[i] += alpha * y[i]
     end
-
     function dot(dev_id, i, x, y)
         return x[i] * y[i]
     end
-
     SIZE = 10
     x = round.(rand(Float64, SIZE) * 100)
     y = round.(rand(Float64, SIZE) * 100)
@@ -597,7 +641,27 @@ end
     JACC.Multi.parallel_for(SIZE, axpy, alpha, dx, dy)
     x_expected = x
     seq_axpy(SIZE, alpha, x_expected, y)
-    @test Base.Array(dx)≈x_expected rtol=1e-1
+    @test convert(Base.Array, dx)≈x_expected rtol=1e-1
     res = JACC.Multi.parallel_reduce(SIZE, dot, dx, dy)
-    @test res ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
+    @test Base.Array(res)[] ≈ seq_dot(SIZE, x_expected, y) rtol=1e-1
+
+    # Multidimensional arrays
+    function axpy_2d(dev_id, i, j, alpha, x, y)
+        x[i,j] += alpha * y[i,j]
+    end
+    function dot_2d(dev_id, i, j, x, y)
+        return x[i,j] * y[i,j]
+    end
+    SIZE = 10
+    x = round.(rand(Float64, SIZE, SIZE) * 100)
+    y = round.(rand(Float64, SIZE, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array(x)
+    dy = JACC.Multi.array(y)
+    JACC.Multi.parallel_for((SIZE,SIZE), axpy_2d, alpha, dx, dy)
+    x_expected = x
+    seq_axpy(SIZE, SIZE, alpha, x_expected, y)
+    @test convert(Base.Array, dx) ≈ x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce((SIZE,SIZE), dot_2d, dx, dy)
+    @test Base.Array(res)[] ≈ seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
 end
