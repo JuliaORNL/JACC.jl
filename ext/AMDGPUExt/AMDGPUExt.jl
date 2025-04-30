@@ -102,6 +102,7 @@ function JACC.parallel_for(
         cld(blockAttrs.total, x_thr),
         cld(maxThreads, x_thr)
     )
+    x_thr = fld(maxThreads, y_thr)
     threads = (x_thr, y_thr)
     blocks = (cld(m, x_thr), cld(n, y_thr))
 
@@ -144,6 +145,7 @@ function JACC.parallel_for(
             cld(blockAttrs.total, x_thr),
             cld(maxThreads, x_thr)
         )
+        x_thr = fld(maxThreads, y_thr)
         spec.threads = (x_thr, y_thr)
     end
 
