@@ -12,10 +12,12 @@ end
 struct ArrayPart{T, N}
     a::CuDeviceArray{T, N, CUDA.AS.Global}
     dev_id::Int
+    ndev::Int32
     ghost_dims::Int
 end
 
 @inline Base.size(p::ArrayPart) = size(p.a)
+@inline Base.length(p::ArrayPart) = length(p.a)
 @inline Base.getindex(p::ArrayPart, i) = getindex(p.a, i)
 @inline Base.getindex(p::ArrayPart, i, j) = getindex(p.a, i, j)
 @inline Base.setindex!(p::ArrayPart, v, i) = setindex!(p.a, v, i)
@@ -101,7 +103,7 @@ function make_multi_array(x::Base.Vector{T}) where {T}
     for i in 1:ndev
         device!(i - 1)
         parts[i] = CuArray(x[(((i - 1) * partlen) + 1):(i * partlen)])
-        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, 0)
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ndev, 0)
     end
 
     device!(0)
@@ -126,7 +128,7 @@ function make_multi_array(x::Base.Vector{T}, ghost_dims) where {T}
         else
             parts[i] = CuArray(x[((i - 1) * partlen + 1 - ng):(i * partlen + ng)])
         end
-        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ng)
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ndev, ng)
     end
 
     device!(0)
@@ -144,7 +146,7 @@ function make_multi_array(x::Base.Matrix{T}) where {T}
     for i in 1:ndev
         device!(i - 1)
         parts[i] = CuArray(x[:, (((i - 1) * partlen) + 1):(i * partlen)])
-        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, 0)
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ndev, 0)
     end
 
     device!(0)
@@ -169,7 +171,7 @@ function make_multi_array(x::Base.Matrix{T}, ghost_dims) where {T}
         else
             parts[i] = CuArray(x[:, ((i - 1) * partlen + 1 - ng):(i * partlen + ng)])
         end
-        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ng)
+        devparts[i] = ArrayPart(cudaconvert(parts[i]), i, ndev, ng)
     end
 
     device!(0)
@@ -186,10 +188,9 @@ end
 
 function JACC.Multi.ghost_shift(::CUDABackend, i::Integer, arr::ArrayPart)
     dev_id = device(arr)
-    ndev = ndevices()
     if dev_id == 1
         ind = i
-    elseif dev_id == ndev
+    elseif dev_id == arr.ndev
         ind = i + ghost_dims(arr)
     else
         ind = i + ghost_dims(arr)
@@ -201,10 +202,9 @@ function JACC.Multi.ghost_shift(
         ::CUDABackend, (i, j)::NTuple{2, Integer}, arr::ArrayPart)
     ind = (0, 0)
     dev_id = device(arr)
-    ndev = ndevices()
     if dev_id == 1
         ind = (i, j)
-    elseif dev_id == ndev
+    elseif dev_id == arr.ndev
         ind = (i, j + ghost_dims(arr))
     else
         ind = (i, j + ghost_dims(arr))
@@ -223,10 +223,9 @@ function JACC.Multi.sync_ghost_elems(arr::MultiArray{T,N}) where {T,N}
             device!(i - 1)
             tmp = Base.Array(arr.a2[i])
             size = length(tmp)
-            ghost_lr = tmp[(size + 1 - 2*ng):(size - ng)]
+            ghost_lr = CuArray(tmp[(size + 1 - 2*ng):(size - ng)])
             device!(i)
-            @cuda threads=32 blocks=1 _multi_swap_ghost_lr(
-                arr.a1[i + 1], ghost_lr)
+            @cuda threads=32 blocks=1 _multi_swap_ghost_lr(arr.a1[i + 1], ghost_lr)
         end
 
         #Right to left swapping
@@ -234,7 +233,7 @@ function JACC.Multi.sync_ghost_elems(arr::MultiArray{T,N}) where {T,N}
             device!(i - 1)
             tmp = Base.Array(arr.a2[i])
             size = length(tmp)
-            ghost_rl = tmp[(1 + ng):(2*ng)]
+            ghost_rl = CuArray(tmp[(1 + ng):(2*ng)])
             device!(i - 2)
             @cuda threads=32 blocks=1 _multi_swap_ghost_rl(
                 arr.a1[i - 1], ghost_rl)
@@ -393,26 +392,29 @@ function JACC.Multi.copy(::CUDABackend, x::MultiArray, y::MultiArray)
             # "gcopytoarray"
             for i in 1:ndev
                 device!(i - 1)
+                size = length(y.a2[i])
                 threads = min(size, numThreads)
                 blocks = ceil(Int, size / threads)
                 @cuda threads=threads blocks=blocks _multi_copy_ghosttoarray(
-                    x.a1[i], y.a1[i])
+                    x.a1[i], y.a1[i], ndev)
             end
         elseif ghost_dims(x) != 0 && ghost_dims(y) == 0
             # "copytogarray"
             for i in 1:ndev
                 device!(i - 1)
+                size = length(x.a2[i])
                 threads = min(size, numThreads)
                 blocks = ceil(Int, size / threads)
                 @cuda threads=threads blocks=blocks _multi_copy_arraytoghost(
-                    x.a1[i], y.a1[i])
+                    x.a1[i], y.a1[i], ndev)
             end
         else
             for i in 1:ndev
                 device!(i - 1)
+                size = length(x.a2[i])
                 threads = min(size, numThreads)
                 blocks = cld(size, threads)
-                @cuda threads=threads blocks=blocks _multi_copy(i, x.a1[i], y.a1[i])
+                @cuda threads=threads blocks=blocks _multi_copy(x.a1[i], y.a1[i])
             end
         end
 
@@ -422,9 +424,12 @@ function JACC.Multi.copy(::CUDABackend, x::MultiArray, y::MultiArray)
         end
 
     elseif ndims(x.a2[1]) == 2
+
+        # TODO: handle arrays with ghost elements
+
         for i in 1:ndev
             device!(i - 1)
-            ssize = size(x[2][i])
+            ssize = size(x.a2[i])
             numThreads = 16
             Mthreads = min(ssize[1], numThreads)
             Mblocks = cld(ssize[1], Mthreads)
@@ -939,16 +944,16 @@ function _multi_copy_2d_old(dev_id, x, y)
     return nothing
 end
 
-function _multi_copy_ghosttoarray(x, y)
+function _multi_copy_ghosttoarray(x::ArrayPart, y::ArrayPart, ndev::Integer)
     #x is the array and y is the ghost array
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     dev_id = device(x)
-    size = length(y)
-    if dev_id == 1 && i < size
+    len = length(y)
+    if dev_id == 1 && i < len
         @inbounds x[i] = y[i]
     elseif dev_id == ndev && i > 1
         @inbounds x[i - 1] = y[i]
-    elseif i > 1 && i < size
+    elseif i > 1 && i < len
         @inbounds x[i - 1] = y[i]
     end
     return nothing
@@ -967,16 +972,16 @@ function _multi_copy_ghosttoarray_old(dev_id, x, y, size, ndev)
     return nothing
 end
 
-function _multi_copy_arraytoghost(x, y)
+function _multi_copy_arraytoghost(x::ArrayPart, y::ArrayPart, ndev::Integer)
     #x is the ghost array and y is the array
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     dev_id = device(x)
-    size = length(x)
-    if dev_id == 1 && i < size
+    len = length(x)
+    if dev_id == 1 && i < len
         @inbounds x[i] = y[i]
-    elseif dev_id == ndev && i < size
+    elseif dev_id == ndev && i < len
         @inbounds x[i + 1] = y[i]
-    elseif i > 1 && i < size
+    elseif i > 1 && i < len
         @inbounds x[i] = y[i]
     end
     return nothing
@@ -997,22 +1002,19 @@ end
 
 function _multi_swap_ghost_lr(arr::ArrayPart, ghost)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    if i == 1
-        ng = arr.ghost_dims
-        for n in 1:ng
-            arr[n] = ghost[n]
-        end
+    ng = ghost_dims(arr)
+    if i <= ng
+        arr[i] = ghost[i]
     end
     return nothing
 end
 
 function _multi_swap_ghost_rl(arr::ArrayPart, ghost)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    if i == 1
-        ng = arr.ghost_dims
-        for n in 1:ng
-            arr[size - ng + n] = ghost[n]
-        end
+    ng = ghost_dims(arr)
+    len = length(arr)
+    if i <= ng
+        arr[len - ng + i] = ghost[i]
     end
     return nothing
 end

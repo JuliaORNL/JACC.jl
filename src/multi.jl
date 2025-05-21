@@ -16,7 +16,7 @@ function array(x::Base.Array; ghost_dims = 0)
 end
 
 function ghost_shift(idx::Union{Integer,NTuple{2,Integer}}, arr)
-    return ghost_shift(JACC.default_backend(), i, arr)
+    return ghost_shift(JACC.default_backend(), idx, arr)
 end
 
 function sync_ghost_elems(arr)
