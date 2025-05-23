@@ -9,6 +9,9 @@ include("array.jl")
 include("multi.jl")
 using .Multi
 
+include("async.jl")
+using .Async
+
 # overloaded experimental functions
 include("experimental/experimental.jl")
 using .Experimental
