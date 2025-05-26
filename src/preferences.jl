@@ -28,7 +28,8 @@ function _check_install_backend(backend, backend_lc)
 end
 
 function _check_install_backend(backend::AbstractString)
-    match = filter(b -> backend == lowercase(b), ["CUDA", "AMDGPU", "oneAPI"])
+    match = filter(
+        b -> backend == lowercase(b), ["CUDA", "AMDGPU", "oneAPI", "Metal"])
     if !isempty(match)
         _check_install_backend(match[], backend)
     end
@@ -57,7 +58,8 @@ function _check_uninstall_backend(backend, backend_lc)
 end
 
 function _uninstall_backend(backend::AbstractString)
-    match = filter(b -> backend == lowercase(b), ["CUDA", "AMDGPU", "oneAPI"])
+    match = filter(
+        b -> backend == lowercase(b), ["CUDA", "AMDGPU", "oneAPI", "Metal"])
     if !isempty(match)
         _check_uninstall_backend(match[], backend)
     end
@@ -65,13 +67,14 @@ end
 
 _uninstall_backends() = _uninstall_backend.(Preferences.Backend._LIST[])
 
-const supported_backends = ("threads", "cuda", "amdgpu", "oneapi")
+const supported_backends = ("threads", "cuda", "amdgpu", "oneapi", "metal")
 
 baremodule Backend
 const threads = :threads
 const cuda = :cuda
 const amdgpu = :amdgpu
 const oneapi = :oneapi
+const metal = :metal
 end
 
 module Preferences
@@ -97,6 +100,10 @@ function backend_import(backend::String)
     backend == "oneapi" && return quote
         import oneAPI
         @info "oneAPI backend loaded"
+    end
+    backend == "metal" && return quote
+        import Metal
+        @info "Metal backend loaded"
     end
     backend == "threads" && return quote
         @info "Threads backend loaded with $(Threads.nthreads()) threads"
