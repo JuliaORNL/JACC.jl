@@ -7,6 +7,10 @@ function ndev()
     return ndev(JACC.default_backend())
 end
 
+function device_id(x)
+    return device_id(JACC.default_backend(), x)
+end
+
 function multi_array_type()
     return multi_array_type(default_backend())
 end

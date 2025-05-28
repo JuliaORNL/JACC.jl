@@ -22,8 +22,10 @@ end
 @inline Base.getindex(p::ArrayPart, i, j) = getindex(p.a, i, j)
 @inline Base.setindex!(p::ArrayPart, v, i) = setindex!(p.a, v, i)
 @inline Base.setindex!(p::ArrayPart, v, i, j) = setindex!(p.a, v, i, j)
-@inline device(p::ArrayPart) = p.dev_id
+@inline device_id(p::ArrayPart) = p.dev_id
 @inline ghost_dims(p::ArrayPart) = p.ghost_dims
+
+@inline JACC.Multi.device_id(::CUDABackend, p::ArrayPart) = p.dev_id
 
 struct MultiArray{T,N,NG}
     a1::Vector{ArrayPart{T, N}}
@@ -187,7 +189,7 @@ function JACC.Multi.array(::CUDABackend, x::Base.Array; ghost_dims)
 end
 
 function JACC.Multi.ghost_shift(::CUDABackend, i::Integer, arr::ArrayPart)
-    dev_id = device(arr)
+    dev_id = device_id(arr)
     if dev_id == 1
         ind = i
     elseif dev_id == arr.ndev
@@ -201,7 +203,7 @@ end
 function JACC.Multi.ghost_shift(
         ::CUDABackend, (i, j)::NTuple{2, Integer}, arr::ArrayPart)
     ind = (0, 0)
-    dev_id = device(arr)
+    dev_id = device_id(arr)
     if dev_id == 1
         ind = (i, j)
     elseif dev_id == arr.ndev
@@ -651,7 +653,7 @@ function JACC.Multi.parallel_for(::CUDABackend, N::Integer, f::Callable, x...)
         device!(i - 1)
         dev_id = i
         @cuda threads=threads blocks=blocks _multi_parallel_for_cuda(
-            N_multi, dev_id, f, process_param.((x), dev_id)...)
+            N_multi, f, process_param.((x), dev_id)...)
     end
 
     for i in 1:ndev
@@ -673,7 +675,7 @@ function JACC.Multi.parallel_for_old(::CUDABackend, N::Integer, f::Callable, x..
     for i in 1:ndev
         device!(i - 1)
         dev_id = i
-        @cuda threads=threads blocks=blocks _multi_parallel_for_cuda(
+        @cuda threads=threads blocks=blocks _multi_parallel_for_cuda_old(
             N_multi, dev_id, f, x...)
     end
 
@@ -707,7 +709,7 @@ function JACC.Multi.parallel_reduce(
         device!(i - 1)
         dev_id = i
         @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _multi_parallel_reduce_cuda(
-            N_multi, dev_id, ret[i], f, process_param.((x), dev_id)...)
+            N_multi, ret[i], f, process_param.((x), dev_id)...)
         @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) _multi_reduce_kernel_cuda(
             blocks, ret[i], rret[i])
     end
@@ -747,7 +749,7 @@ function JACC.Multi.parallel_reduce_old(
     for i in 1:ndev
         device!(i - 1)
         dev_id = i
-        @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _multi_parallel_reduce_cuda(
+        @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) _multi_parallel_reduce_cuda_old(
             N_multi, dev_id, ret[i], f, x...)
         @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) _multi_reduce_kernel_cuda(
             blocks, ret[i], rret[i])
@@ -783,7 +785,7 @@ function JACC.Multi.parallel_for(::CUDABackend,
         device!(i - 1)
         dev_id = i
         @cuda threads=threads blocks=blocks _multi_parallel_for_cuda_MN(
-            M, N_multi, dev_id, f, process_param.((x), dev_id)...)
+            M, N_multi, f, process_param.((x), dev_id)...)
     end
 
     for i in 1:ndev
@@ -807,7 +809,7 @@ function JACC.Multi.parallel_for_old(::CUDABackend,
     for i in 1:ndev
         device!(i - 1)
         dev_id = i
-        @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _multi_parallel_for_cuda_MN(
+        @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) _multi_parallel_for_cuda_MN_old(
             M, N_multi, dev_id, f, x...)
     end
 
@@ -845,7 +847,7 @@ function JACC.Multi.parallel_reduce(::CUDABackend,
         @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
                                                                            16 *
                                                                            sizeof(Float64) _multi_parallel_reduce_cuda_MN(
-            (M, N_multi), dev_id, ret[i], f, process_param.((x), dev_id)...)
+            (M, N_multi), ret[i], f, process_param.((x), dev_id)...)
 
         @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=16 * 16 *
                                                                sizeof(Float64) _multi_reduce_kernel_cuda_MN(
@@ -892,7 +894,7 @@ function JACC.Multi.parallel_reduce_old(::CUDABackend,
         device!(i - 1)
         dev_id = i
 
-        @cuda threads=threads blocks=blocks shmem=shmem_size _multi_parallel_reduce_cuda_MN(
+        @cuda threads=threads blocks=blocks shmem=shmem_size _multi_parallel_reduce_cuda_MN_old(
             (M, N_multi), dev_id, ret[i], f, x...)
 
         @cuda threads=threads blocks=(1, 1) shmem=shmem_size _multi_reduce_kernel_cuda_MN(
@@ -947,7 +949,7 @@ end
 function _multi_copy_ghosttoarray(x::ArrayPart, y::ArrayPart, ndev::Integer)
     #x is the array and y is the ghost array
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    dev_id = device(x)
+    dev_id = device_id(x)
     len = length(y)
     if dev_id == 1 && i < len
         @inbounds x[i] = y[i]
@@ -975,7 +977,7 @@ end
 function _multi_copy_arraytoghost(x::ArrayPart, y::ArrayPart, ndev::Integer)
     #x is the ghost array and y is the array
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    dev_id = device(x)
+    dev_id = device_id(x)
     len = length(x)
     if dev_id == 1 && i < len
         @inbounds x[i] = y[i]
@@ -1074,7 +1076,15 @@ function _multi_swap_2d_ghost_rl_old(dev_id, x, ndev, size, col, ghost)
     return nothing
 end
 
-function _multi_parallel_for_cuda(N, dev_id, f, x...)
+function _multi_parallel_for_cuda(N, f, x...)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i <= N
+        f(i, x...)
+    end
+    return nothing
+end
+
+function _multi_parallel_for_cuda_old(N, dev_id, f, x...)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= N
         f(dev_id, i, x...)
@@ -1082,7 +1092,58 @@ function _multi_parallel_for_cuda(N, dev_id, f, x...)
     return nothing
 end
 
-function _multi_parallel_reduce_cuda(N, dev_id, ret, f, x...)
+function _multi_parallel_reduce_cuda(N, ret, f, x...)
+    shared_mem = CuDynamicSharedArray(Float64, 512)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    ti = threadIdx().x
+    tmp::Float64 = 0.0
+    shared_mem[ti] = 0.0
+
+    if i <= N
+        tmp = @inbounds f(i, x...)
+        shared_mem[threadIdx().x] = tmp
+    end
+    sync_threads()
+    if (ti <= 256)
+        shared_mem[ti] += shared_mem[ti + 256]
+    end
+    sync_threads()
+    if (ti <= 128)
+        shared_mem[ti] += shared_mem[ti + 128]
+    end
+    sync_threads()
+    if (ti <= 64)
+        shared_mem[ti] += shared_mem[ti + 64]
+    end
+    sync_threads()
+    if (ti <= 32)
+        shared_mem[ti] += shared_mem[ti + 32]
+    end
+    sync_threads()
+    if (ti <= 16)
+        shared_mem[ti] += shared_mem[ti + 16]
+    end
+    sync_threads()
+    if (ti <= 8)
+        shared_mem[ti] += shared_mem[ti + 8]
+    end
+    sync_threads()
+    if (ti <= 4)
+        shared_mem[ti] += shared_mem[ti + 4]
+    end
+    sync_threads()
+    if (ti <= 2)
+        shared_mem[ti] += shared_mem[ti + 2]
+    end
+    sync_threads()
+    if (ti == 1)
+        shared_mem[ti] += shared_mem[ti + 1]
+        ret[blockIdx().x] = shared_mem[ti]
+    end
+    return nothing
+end
+
+function _multi_parallel_reduce_cuda_old(N, dev_id, ret, f, x...)
     shared_mem = CuDynamicSharedArray(Float64, 512)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     ti = threadIdx().x
@@ -1187,7 +1248,16 @@ function _multi_reduce_kernel_cuda(N, red, ret)
     return nothing
 end
 
-function _multi_parallel_for_cuda_MN(M, N, dev_id, f, x...)
+function _multi_parallel_for_cuda_MN(M, N, f, x...)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    if (i <= M) && (j <= N)
+        f(i, j, x...)
+    end
+    return nothing
+end
+
+function _multi_parallel_for_cuda_MN_old(M, N, dev_id, f, x...)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     if (i <= M) && (j <= N)
@@ -1196,7 +1266,52 @@ function _multi_parallel_for_cuda_MN(M, N, dev_id, f, x...)
     return nothing
 end
 
-function _multi_parallel_reduce_cuda_MN((M, N), dev_id, ret, f, x...)
+function _multi_parallel_reduce_cuda_MN((M, N), ret, f, x...)
+    shared_mem = CuDynamicSharedArray(Float64, 16*16)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    ti = threadIdx().x
+    tj = threadIdx().y
+    bi = blockIdx().x
+    bj = blockIdx().y
+
+    sid = ((ti - 1) * 16) + tj
+    tmp::Float64 = 0.0
+    shared_mem[sid] = tmp
+
+    if (i <= M && j <= N)
+        tmp = @inbounds f(i, j, x...)
+        shared_mem[(ti - 1) * 16 + tj] = tmp
+    end
+    sync_threads()
+    if (ti <= 8 && tj <= 8)
+        shared_mem[sid] += shared_mem[((ti + 7) * 16) + (tj + 8)]
+        shared_mem[sid] += shared_mem[((ti - 1) * 16) + (tj + 8)]
+        shared_mem[sid] += shared_mem[((ti + 7) * 16) + tj]
+    end
+    sync_threads()
+    if (ti <= 4 && tj <= 4)
+        shared_mem[sid] += shared_mem[((ti + 3) * 16) + (tj + 4)]
+        shared_mem[sid] += shared_mem[((ti - 1) * 16) + (tj + 4)]
+        shared_mem[sid] += shared_mem[((ti + 3) * 16) + tj]
+    end
+    sync_threads()
+    if (ti <= 2 && tj <= 2)
+        shared_mem[sid] += shared_mem[((ti + 1) * 16) + (tj + 2)]
+        shared_mem[sid] += shared_mem[((ti - 1) * 16) + (tj + 2)]
+        shared_mem[sid] += shared_mem[((ti + 1) * 16) + tj]
+    end
+    sync_threads()
+    if (ti == 1 && tj == 1)
+        shared_mem[sid] += shared_mem[ti * 16 + (tj + 1)]
+        shared_mem[sid] += shared_mem[((ti - 1) * 16) + (tj + 1)]
+        shared_mem[sid] += shared_mem[ti * 16 + tj]
+        ret[bi, bj] = shared_mem[sid]
+    end
+    return nothing
+end
+
+function _multi_parallel_reduce_cuda_MN_old((M, N), dev_id, ret, f, x...)
     shared_mem = CuDynamicSharedArray(Float64, 16*16)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y

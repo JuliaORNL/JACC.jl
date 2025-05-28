@@ -7,6 +7,10 @@ import JACC.ThreadsImpl: ThreadsBackend
 function JACC.Multi.ndev(::ThreadsBackend)
 end
 
+function JACC.Multi.device_id(::ThreadsBackend, x)
+    return 0
+end
+
 function JACC.Multi.array(::ThreadsBackend, x::Base.Array; ghost_dims)
     return x
 end

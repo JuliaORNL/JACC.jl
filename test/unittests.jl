@@ -699,10 +699,10 @@ end
 
 @testset "Multi" begin
     # Unidimensional arrays
-    function axpy(dev_id, i, alpha, x, y)
+    function axpy(i, alpha, x, y)
         x[i] += alpha * y[i]
     end
-    function dot(dev_id, i, x, y)
+    function dot(i, x, y)
         return x[i] * y[i]
     end
     SIZE = 10
@@ -719,10 +719,10 @@ end
     @test Base.Array(res)[]≈seq_dot(SIZE, x_expected, y) rtol=1e-1
 
     # Multidimensional arrays
-    function axpy_2d(dev_id, i, j, alpha, x, y)
+    function axpy_2d(i, j, alpha, x, y)
         x[i, j] += alpha * y[i, j]
     end
-    function dot_2d(dev_id, i, j, x, y)
+    function dot_2d(i, j, x, y)
         return x[i, j] * y[i, j]
     end
     SIZE = 10
@@ -739,8 +739,9 @@ end
     @test Base.Array(res)[]≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
 
     # HPCG example
-    function matvecmul(dev_id, i, a1, a2, a3, x, y, SIZE, ndev)
+    function matvecmul(i, a1, a2, a3, x, y, SIZE, ndev)
         ind = JACC.Multi.ghost_shift(i, a1)
+        dev_id = JACC.Multi.device_id(a1)
         if dev_id == 1 && i == 1
             y[ind] = a2[ind] * x[ind] + a1[ind] * x[ind + 1]
         elseif dev_id == ndev && i == SIZE
