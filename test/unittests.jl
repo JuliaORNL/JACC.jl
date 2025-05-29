@@ -557,146 +557,6 @@ end
     @test f2≈Base.Array(df2) rtol=1e-1
 end
 
-using CUDA
-@testset "MultiOld" begin
-    # Unidimensional arrays
-    function axpy(dev_id, i, alpha, x, y)
-        x[dev_id][i] += alpha * y[dev_id][i]
-    end
-
-    function dot(dev_id, i, x, y)
-        return x[dev_id][i] * y[dev_id][i]
-    end
-
-    function copy_to_array(SIZE::Integer, ma::Vector{Any})
-        device!(0)
-        ndev = JACC.Multi.ndev()
-        partlen = cld(SIZE, ndev)
-        if ndims(ma[1]) == 2
-            ret = Base.Array{eltype(ma[1]), ndims(ma[1])}(
-                undef, size(ma[1], 1), partlen * ndev)
-        else
-            ret = Base.Array{eltype(ma[1]), ndims(ma[1])}(undef, partlen * ndev)
-        end
-        for i in 1:ndev
-            device!(i - 1)
-            if ndims(ma[i]) == 2
-                copyto!(ret,
-                    CartesianIndices((1:size(ma[i], 1),
-                        (((i - 1) * partlen) + 1):(i * partlen))),
-                    ma[i], CartesianIndices(ma[i]))
-            else
-                copyto!(ret, (((i - 1) * partlen) + 1), ma[i], 1, partlen)
-            end
-        end
-        device!(0)
-        return ret
-    end
-
-    SIZE = 10
-    x = round.(rand(Float64, SIZE) * 100)
-    y = round.(rand(Float64, SIZE) * 100)
-    alpha = 2.5
-    dx = JACC.Multi.array_old(x)
-    dy = JACC.Multi.array_old(y)
-    JACC.Multi.parallel_for_old(SIZE, axpy, alpha, dx[1], dy[1])
-    x_expected = x
-    seq_axpy(SIZE, alpha, x_expected, y)
-    @test copy_to_array(SIZE, dx[2])≈x_expected rtol=1e-1
-    res = JACC.Multi.parallel_reduce_old(SIZE, dot, dx[1], dy[1])
-    @test Base.Array(res)[]≈seq_dot(SIZE, x_expected, y) rtol=1e-1
-
-    # Multidimensional arrays
-    function axpy_2d(dev_id, i, j, alpha, x, y)
-        x[dev_id][i, j] += alpha * y[dev_id][i, j]
-    end
-    function dot_2d(dev_id, i, j, x, y)
-        return x[dev_id][i, j] * y[dev_id][i, j]
-    end
-    SIZE = 10
-    x = round.(rand(Float64, SIZE, SIZE) * 100)
-    y = round.(rand(Float64, SIZE, SIZE) * 100)
-    alpha = 2.5
-    dx = JACC.Multi.array_old(x)
-    dy = JACC.Multi.array_old(y)
-    JACC.Multi.parallel_for_old((SIZE, SIZE), axpy_2d, alpha, dx[1], dy[1])
-    x_expected = x
-    seq_axpy(SIZE, SIZE, alpha, x_expected, y)
-    @test copy_to_array(SIZE, dx[2])≈x_expected rtol=1e-1
-    res = JACC.Multi.parallel_reduce_old((SIZE, SIZE), dot_2d, dx[1], dy[1])
-    @test Base.Array(res)[]≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
-
-    # HPCG example
-    function matvecmul_old(dev_id, i, a1, a2, a3, x, y, SIZE, ndev)
-        ind = JACC.Multi.gid(dev_id, i, ndev)
-        if dev_id == 1 && i == 1
-            y[dev_id][ind] = a2[dev_id][ind] * x[dev_id][ind] +
-                             a1[dev_id][ind] * x[dev_id][ind + 1]
-        elseif dev_id == ndev && i == SIZE
-            y[dev_id][ind] = a3[dev_id][ind] * x[dev_id][ind - 1] +
-                             a2[dev_id][ind] * x[dev_id][ind]
-        else
-            y[dev_id][ind] = a3[dev_id][ind] * x[dev_id][ind - 1] +
-                             a2[dev_id][ind] * x[dev_id][ind] +
-                             a1[dev_id][ind] * x[dev_id][ind + 1]
-        end
-    end
-
-    SIZE = 10
-    # Initialization of inputs
-    a1 = ones(SIZE)
-    a2 = ones(SIZE)
-    a3 = ones(SIZE)
-    r = ones(SIZE)
-    p = ones(SIZE)
-    s = zeros(SIZE)
-    x = zeros(SIZE)
-    r_old = zeros(SIZE)
-    r_aux = zeros(SIZE)
-    a2 = a2 * 4
-    r = r * 0.5
-    p = p * 0.5
-    cond = 1.0
-    ndev = JACC.Multi.ndev()
-    gja1 = JACC.Multi.gArray(a1)
-    gja2 = JACC.Multi.gArray(a2)
-    gja3 = JACC.Multi.gArray(a3)
-    jr = JACC.Multi.array_old(r)
-    jp = JACC.Multi.array_old(p)
-    gjp = JACC.Multi.gArray(p)
-    js = JACC.Multi.array_old(s)
-    gjs = JACC.Multi.gArray(s)
-    jx = JACC.Multi.array_old(x)
-    jr_old = JACC.Multi.array_old(r_old)
-    jr_aux = JACC.Multi.array_old(r_aux)
-    ssize = length(jp[2][ndev])
-    # HPCG Algorithm      
-    while cond >= 1e-14
-        JACC.Multi.copy_old(jr_old, jr)
-        JACC.Multi.parallel_for_old(SIZE, matvecmul_old, gja1[1], gja2[1],
-            gja3[1], gjp[1], gjs[1], ssize, ndev)
-        JACC.Multi.gswap(gjs)
-        JACC.Multi.gcopytoarray(js, gjs) #js = gjs
-        alpha0 = JACC.Multi.parallel_reduce_old(SIZE, dot, jr[1], jr[1])
-        alpha1 = JACC.Multi.parallel_reduce_old(SIZE, dot, jp[1], js[1])
-        alpha = Base.Array(alpha0)[] / Base.Array(alpha1)[]
-        m_alpha = alpha * (-1.0)
-        JACC.Multi.parallel_for_old(SIZE, axpy, m_alpha, jr[1], js[1])
-        JACC.Multi.parallel_for_old(SIZE, axpy, alpha, jx[1], jp[1])
-        beta0 = JACC.Multi.parallel_reduce_old(SIZE, dot, jr[1], jr[1])
-        beta1 = JACC.Multi.parallel_reduce_old(SIZE, dot, jr_old[1], jr_old[1])
-        beta = Base.Array(beta0)[] / Base.Array(beta1)[]
-        JACC.Multi.copy_old(jr_aux, jr)
-        JACC.Multi.parallel_for_old(SIZE, axpy, beta, jr_aux[1], jp[1])
-        ccond = JACC.Multi.parallel_reduce_old(SIZE, dot, jr[1], jr[1])
-        cond = Base.Array(ccond)[]
-        JACC.Multi.copy_old(jp, jr_aux)
-        JACC.Multi.copytogarray(gjp, jp) #gjp = jp
-        JACC.Multi.gswap(gjp)
-    end
-    @test cond <= 1e-14
-end
-
 @testset "Multi" begin
     # Unidimensional arrays
     function axpy(i, alpha, x, y)
@@ -716,7 +576,7 @@ end
     seq_axpy(SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
     res = JACC.Multi.parallel_reduce(SIZE, dot, dx, dy)
-    @test Base.Array(res)[]≈seq_dot(SIZE, x_expected, y) rtol=1e-1
+    @test res≈seq_dot(SIZE, x_expected, y) rtol=1e-1
 
     # Multidimensional arrays
     function axpy_2d(i, j, alpha, x, y)
@@ -736,7 +596,7 @@ end
     seq_axpy(SIZE, SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
     res = JACC.Multi.parallel_reduce((SIZE, SIZE), dot_2d, dx, dy)
-    @test Base.Array(res)[]≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
+    @test res≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
 
     # HPCG example
     function matvecmul(i, a1, a2, a3, x, y, SIZE, ndev)
@@ -790,17 +650,17 @@ end
         JACC.Multi.copy(js, gjs) #js = gjs
         alpha0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
         alpha1 = JACC.Multi.parallel_reduce(SIZE, dot, jp, js)
-        alpha = Base.Array(alpha0)[] / Base.Array(alpha1)[]
+        alpha = alpha0 / alpha1
         m_alpha = alpha * (-1.0)
         JACC.Multi.parallel_for(SIZE, axpy, m_alpha, jr, js)
         JACC.Multi.parallel_for(SIZE, axpy, alpha, jx, jp)
         beta0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
         beta1 = JACC.Multi.parallel_reduce(SIZE, dot, jr_old, jr_old)
-        beta = Base.Array(beta0)[] / Base.Array(beta1)[]
+        beta = beta0 / beta1
         JACC.Multi.copy(jr_aux, jr)
         JACC.Multi.parallel_for(SIZE, axpy, beta, jr_aux, jp)
         ccond = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
-        cond = Base.Array(ccond)[]
+        cond = ccond
         JACC.Multi.copy(jp, jr_aux)
         JACC.Multi.copy(gjp, jp) #gjp = jp
         JACC.Multi.sync_ghost_elems(gjp)

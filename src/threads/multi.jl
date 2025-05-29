@@ -21,28 +21,6 @@ function JACC.Multi.ghost_shift(::ThreadsBackend, idx, arr)
     return idx
 end
 
-function JACC.Multi.array_old(::ThreadsBackend, x::Base.Array{T, N}) where {T, N}
-    return [[x]]
-end
-
-function JACC.Multi.gArray(::ThreadsBackend, x::Base.Array{T, N}) where {T, N}
-end
-
-function JACC.Multi.gid(
-        ::ThreadsBackend, dev_id::Integer, i::Integer, ndev::Integer)
-end
-
-function JACC.Multi.gswap(::ThreadsBackend, x::Vector{Any})
-end
-
-function JACC.Multi.gcopytoarray(
-        ::ThreadsBackend, x::Vector{Any}, y::Vector{Any})
-end
-
-function JACC.Multi.copytogarray(
-        ::ThreadsBackend, x::Vector{Any}, y::Vector{Any})
-end
-
 function JACC.Multi.copy(::ThreadsBackend, x::Vector{Any}, y::Vector{Any})
 end
 
