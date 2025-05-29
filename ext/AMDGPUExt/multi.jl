@@ -183,7 +183,7 @@ function make_multi_array(x::Base.Matrix{T}, ghost_dims) where {T}
 end
 
 function JACC.Multi.array(::AMDGPUBackend, x::Base.Array; ghost_dims)
-    if ghost_dims == 0
+    if ghost_dims == 0 || ndevices() == 1
         return make_multi_array(x)
     else
         return make_multi_array(x, ghost_dims)
@@ -220,6 +220,9 @@ function JACC.Multi.sync_ghost_elems!(::AMDGPUBackend, arr::MultiArray{T,1}) whe
     AMDGPU.device_id!(1)
     ndev = ndevices()
     ng = ghost_dims(arr)
+    if ng == 0
+        return
+    end
 
     #Left to right swapping
     for i in 1:(ndev - 1)
@@ -253,6 +256,9 @@ function JACC.Multi.sync_ghost_elems!(::AMDGPUBackend, arr::MultiArray{T,2}) whe
     AMDGPU.device_id!(1)
     ndev = ndevices()
     ng = ghost_dims(arr)
+    if ng == 0
+        return
+    end
 
     #Left to right swapping
     for i in 1:(ndev - 1)

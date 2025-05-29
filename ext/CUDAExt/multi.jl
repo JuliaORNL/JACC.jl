@@ -182,7 +182,7 @@ function make_multi_array(x::Base.Matrix{T}, ghost_dims) where {T}
 end
 
 function JACC.Multi.array(::CUDABackend, x::Base.Array; ghost_dims)
-    if ghost_dims == 0
+    if ghost_dims == 0 || ndevices() == 1
         return make_multi_array(x)
     else
         return make_multi_array(x, ghost_dims)
@@ -215,71 +215,82 @@ function JACC.Multi.ghost_shift(
     return ind
 end
 
-function JACC.Multi.sync_ghost_elems!(arr::MultiArray{T,N}) where {T,N}
+function JACC.Multi.sync_ghost_elems!(::CUDABackend, arr::MultiArray{T,1}) where {T}
     device!(0)
     ndev = ndevices()
     ng = ghost_dims(arr)
+    if ng == 0
+        return
+    end
 
-    if N == 1
-        #Left to right swapping
-        for i in 1:(ndev - 1)
-            device!(i - 1)
-            tmp = Base.Array(arr.a2[i])
-            size = length(tmp)
-            device!(i)
-            ghost_lr = CuArray(tmp[(size + 1 - 2*ng):(size - ng)])
-            @cuda threads=32 blocks=1 _multi_swap_ghost_lr(arr.a1[i + 1], ghost_lr)
-        end
+    #Left to right swapping
+    for i in 1:(ndev - 1)
+        device!(i - 1)
+        tmp = Base.Array(arr.a2[i])
+        size = length(tmp)
+        device!(i)
+        ghost_lr = CuArray(tmp[(size + 1 - 2*ng):(size - ng)])
+        @cuda threads=32 blocks=1 _multi_swap_ghost_lr(arr.a1[i + 1], ghost_lr)
+    end
 
-        #Right to left swapping
-        for i in 2:ndev
-            device!(i - 1)
-            tmp = Base.Array(arr.a2[i])
-            size = length(tmp)
-            device!(i - 2)
-            ghost_rl = CuArray(tmp[(1 + ng):(2*ng)])
-            @cuda threads=32 blocks=1 _multi_swap_ghost_rl(
-                arr.a1[i - 1], ghost_rl)
-        end
+    #Right to left swapping
+    for i in 2:ndev
+        device!(i - 1)
+        tmp = Base.Array(arr.a2[i])
+        size = length(tmp)
+        device!(i - 2)
+        ghost_rl = CuArray(tmp[(1 + ng):(2*ng)])
+        @cuda threads=32 blocks=1 _multi_swap_ghost_rl(
+            arr.a1[i - 1], ghost_rl)
+    end
 
-        for i in 1:ndev
-            device!(i - 1)
-            CUDA.synchronize()
-        end
+    for i in 1:ndev
+        device!(i - 1)
+        CUDA.synchronize()
+    end
 
-    elseif N == 2
-        #Left to right swapping
-        for i in 1:(ndev - 1)
-            device!(i - 1)
-            dim = size(arr.a2[i])
-            tmp = Base.Array(arr.a2[i][:, (dim[2] + 1 - 2*ng):(dim[2] - ng)])
-            device!(i)
-            ghost_lr = CuArray(tmp)
-            numThreads = 512
-            threads = min(dim[1], numThreads)
-            blocks = cld(dim[1], threads)
-            @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_lr(
-                arr.a1[i + 1], ghost_lr)
-        end
+    device!(0)
+end
 
-        #Right to left swapping
-        for i in 2:ndev
-            device!(i - 1)
-            tmp = Base.Array(arr.a2[i][:, (1 + ng):(2*ng)])
-            device!(i - 2)
-            dim = size(arr.a2[i - 1])
-            ghost_rl = CuArray(tmp)
-            numThreads = 512
-            threads = min(dim[1], numThreads)
-            blocks = cld(dim[1], threads)
-            @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_rl(
-                arr.a1[i - 1], ghost_rl)
-        end
+function JACC.Multi.sync_ghost_elems!(::CUDABackend, arr::MultiArray{T,2}) where {T}
+    device!(0)
+    ndev = ndevices()
+    ng = ghost_dims(arr)
+    if ng == 0
+        return
+    end
 
-        for i in 1:ndev
-            device!(i - 1)
-            CUDA.synchronize()
-        end
+    #Left to right swapping
+    for i in 1:(ndev - 1)
+        device!(i - 1)
+        dim = size(arr.a2[i])
+        tmp = Base.Array(arr.a2[i][:, (dim[2] + 1 - 2*ng):(dim[2] - ng)])
+        device!(i)
+        ghost_lr = CuArray(tmp)
+        numThreads = 512
+        threads = min(dim[1], numThreads)
+        blocks = cld(dim[1], threads)
+        @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_lr(
+            arr.a1[i + 1], ghost_lr)
+    end
+
+    #Right to left swapping
+    for i in 2:ndev
+        device!(i - 1)
+        tmp = Base.Array(arr.a2[i][:, (1 + ng):(2*ng)])
+        device!(i - 2)
+        dim = size(arr.a2[i - 1])
+        ghost_rl = CuArray(tmp)
+        numThreads = 512
+        threads = min(dim[1], numThreads)
+        blocks = cld(dim[1], threads)
+        @cuda threads=threads blocks=blocks _multi_swap_2d_ghost_rl(
+            arr.a1[i - 1], ghost_rl)
+    end
+
+    for i in 1:ndev
+        device!(i - 1)
+        CUDA.synchronize()
     end
 
     device!(0)
