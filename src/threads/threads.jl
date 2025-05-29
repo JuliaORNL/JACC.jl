@@ -38,7 +38,7 @@ end
 
 function JACC.parallel_for(
         ::LaunchSpec{ThreadsBackend}, N::Integer, f::Callable, x...)
-    parallel_for(ThreadsBackend(), N, f, x...)
+    JACC.parallel_for(ThreadsBackend(), N, f, x...)
 end
 
 function JACC.parallel_for(
@@ -52,7 +52,7 @@ end
 
 function JACC.parallel_for(
         ::LaunchSpec{ThreadsBackend}, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    parallel_for(ThreadsBackend(), (M, N), f, x...)
+    JACC.parallel_for(ThreadsBackend(), (M, N), f, x...)
 end
 
 function JACC.parallel_for(
@@ -69,7 +69,7 @@ end
 
 function JACC.parallel_for(
         ::LaunchSpec{ThreadsBackend}, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
-    parallel_for(ThreadsBackend(), (L, M, N), f, x...)
+    JACC.parallel_for(ThreadsBackend(), (L, M, N), f, x...)
 end
 
 mutable struct ThreadsReduceWorkspace{T} <: JACC.ReduceWorkspace
