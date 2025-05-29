@@ -26,14 +26,6 @@ end
 @inline device_id(p::ArrayPart) = p.dev_id
 @inline ghost_dims(p::ArrayPart) = p.ghost_dims
 
-# function get_portable_rocarray(x::Base.Array{T, N}) where {T, N}
-#     dims = size(x)
-#     bytesize = sizeof(T) * prod(dims)
-#     buf = AMDGPU.Mem.HostBuffer(bytesize, AMDGPU.HIP.hipHostAllocPortable)
-#     ROCArray{T, N}(
-#         AMDGPU.GPUArrays.DataRef(AMDGPU.pool_free, AMDGPU.Managed(buf)), dims)
-# end
-
 @inline JACC.Multi.device_id(::AMDGPUBackend, p::ArrayPart) = p.dev_id
 
 struct MultiArray{T,N,NG}
@@ -43,6 +35,7 @@ struct MultiArray{T,N,NG}
 end
 
 @inline ghost_dims(x::MultiArray{T,N,NG}) where {T,N,NG} = NG
+@inline JACC.Multi.part_length(::AMDGPUBackend, x::MultiArray) = size(x.a2[1])[end]
 
 @inline process_param(x, dev_id) = x
 @inline process_param(x::MultiArray, dev_id) = x.a1[dev_id]
@@ -223,7 +216,7 @@ function JACC.Multi.ghost_shift(
     return ind
 end
 
-function JACC.Multi.sync_ghost_elems(::AMDGPUBackend, arr::MultiArray{T,1}) where {T}
+function JACC.Multi.sync_ghost_elems!(::AMDGPUBackend, arr::MultiArray{T,1}) where {T}
     AMDGPU.device_id!(1)
     ndev = ndevices()
     ng = ghost_dims(arr)
@@ -256,7 +249,7 @@ function JACC.Multi.sync_ghost_elems(::AMDGPUBackend, arr::MultiArray{T,1}) wher
     AMDGPU.device_id!(1)
 end
 
-function JACC.Multi.sync_ghost_elems(::AMDGPUBackend, arr::MultiArray{T,2}) where {T}
+function JACC.Multi.sync_ghost_elems!(::AMDGPUBackend, arr::MultiArray{T,2}) where {T}
     AMDGPU.device_id!(1)
     ndev = ndevices()
     ng = ghost_dims(arr)
@@ -297,7 +290,7 @@ function JACC.Multi.sync_ghost_elems(::AMDGPUBackend, arr::MultiArray{T,2}) wher
     AMDGPU.device_id!(1)
 end
 
-function JACC.Multi.copy(::AMDGPUBackend, x::MultiArray, y::MultiArray)
+function JACC.Multi.copy!(::AMDGPUBackend, x::MultiArray, y::MultiArray)
     AMDGPU.device_id!(1)
     ndev = ndevices()
 

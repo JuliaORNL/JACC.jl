@@ -34,6 +34,7 @@ struct MultiArray{T,N,NG}
 end
 
 @inline ghost_dims(x::MultiArray{T,N,NG}) where {T,N,NG} = NG
+@inline JACC.Multi.part_length(::CUDABackend, x::MultiArray) = size(x.a2[1])[end]
 
 @inline process_param(x, dev_id) = x
 @inline process_param(x::MultiArray, dev_id) = x.a1[dev_id]
@@ -214,7 +215,7 @@ function JACC.Multi.ghost_shift(
     return ind
 end
 
-function JACC.Multi.sync_ghost_elems(arr::MultiArray{T,N}) where {T,N}
+function JACC.Multi.sync_ghost_elems!(arr::MultiArray{T,N}) where {T,N}
     device!(0)
     ndev = ndevices()
     ng = ghost_dims(arr)
@@ -284,7 +285,7 @@ function JACC.Multi.sync_ghost_elems(arr::MultiArray{T,N}) where {T,N}
     device!(0)
 end
 
-function JACC.Multi.copy(::CUDABackend, x::MultiArray, y::MultiArray)
+function JACC.Multi.copy!(::CUDABackend, x::MultiArray, y::MultiArray)
     device!(0)
     ndev = ndevices()
 

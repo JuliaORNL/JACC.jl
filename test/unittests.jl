@@ -639,15 +639,14 @@ end
     jx = JACC.Multi.array(x)
     jr_old = JACC.Multi.array(r_old)
     jr_aux = JACC.Multi.array(r_aux)
-    # TODO: need api function to get part length
-    ssize = length(jp.a2[ndev])
+    ssize = JACC.Multi.part_length(jp)
     # HPCG Algorithm
     while cond >= 1e-14
-        JACC.Multi.copy(jr_old, jr)
+        JACC.Multi.copy!(jr_old, jr)
         JACC.Multi.parallel_for(
             SIZE, matvecmul, gja1, gja2, gja3, gjp, gjs, ssize, ndev)
-        JACC.Multi.sync_ghost_elems(gjs)
-        JACC.Multi.copy(js, gjs) #js = gjs
+        JACC.Multi.sync_ghost_elems!(gjs)
+        JACC.Multi.copy!(js, gjs) #js = gjs
         alpha0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
         alpha1 = JACC.Multi.parallel_reduce(SIZE, dot, jp, js)
         alpha = alpha0 / alpha1
@@ -657,13 +656,13 @@ end
         beta0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
         beta1 = JACC.Multi.parallel_reduce(SIZE, dot, jr_old, jr_old)
         beta = beta0 / beta1
-        JACC.Multi.copy(jr_aux, jr)
+        JACC.Multi.copy!(jr_aux, jr)
         JACC.Multi.parallel_for(SIZE, axpy, beta, jr_aux, jp)
         ccond = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
         cond = ccond
-        JACC.Multi.copy(jp, jr_aux)
-        JACC.Multi.copy(gjp, jp) #gjp = jp
-        JACC.Multi.sync_ghost_elems(gjp)
+        JACC.Multi.copy!(jp, jr_aux)
+        JACC.Multi.copy!(gjp, jp) #gjp = jp
+        JACC.Multi.sync_ghost_elems!(gjp)
     end
     @test cond <= 1e-14
 end

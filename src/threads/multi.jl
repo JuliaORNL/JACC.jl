@@ -5,10 +5,15 @@ import JACC
 import JACC.ThreadsImpl: ThreadsBackend
 
 function JACC.Multi.ndev(::ThreadsBackend)
+    return 1
 end
 
 function JACC.Multi.device_id(::ThreadsBackend, x)
-    return 0
+    return 1
+end
+
+function JACC.Multi.part_length(::ThreadsBackend, x)
+    return size(x)[end]
 end
 
 function JACC.Multi.array(::ThreadsBackend, x::Base.Array; ghost_dims)
@@ -21,27 +26,31 @@ function JACC.Multi.ghost_shift(::ThreadsBackend, idx, arr)
     return idx
 end
 
-function JACC.Multi.copy(::ThreadsBackend, x::Vector{Any}, y::Vector{Any})
+function JACC.Multi.sync_ghost_elems!(::ThreadsBackend, arr)
+end
+
+function JACC.Multi.copy!(::ThreadsBackend, x, y)
+    copy!(x, y)
 end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
-    return JACC.parallel_for(ThreadsBackend(), N, (p...) -> f(1, p...), x...)
+    return JACC.parallel_for(ThreadsBackend(), N, f, x...)
 end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_for(ThreadsBackend(), (M,N), (p...) -> f(1, p...), x...)
+    return JACC.parallel_for(ThreadsBackend(), (M,N), f, x...)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
-    return JACC.parallel_reduce(ThreadsBackend(), N, +, (p...) -> f(1, p...), x...; init = 0.0)
+    return JACC.parallel_reduce(ThreadsBackend(), N, +, f, x...; init = 0.0)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_reduce(ThreadsBackend(), (M,N), +, (p...) -> f(1, p...), x...; init = 0.0)
+    return JACC.parallel_reduce(ThreadsBackend(), (M,N), +, f, x...; init = 0.0)
 end
 
 end
