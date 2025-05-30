@@ -145,6 +145,32 @@ end
     @test mnd == minimum(ah2)
     mnd = JACC.parallel_reduce(min, ad2)
     @test mnd == minimum(ah2)
+
+    function seq_dot(M, N, x, y)
+        r = 0.0
+        for i in 1:M
+            for j in 1:N
+                @inbounds r += x[i, j] * y[i, j]
+            end
+        end
+        return r
+    end
+    function dot_2d(i, j, x, y)
+        return x[i, j] * y[i, j]
+    end
+    SIZE = 10
+    x = round.(rand(Float64, SIZE, SIZE) * 100)
+    y = round.(rand(Float64, SIZE, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.array(x)
+    dy = JACC.array(y)
+    # JACC.Multi.parallel_for((SIZE, SIZE), axpy_2d, alpha, dx, dy)
+    # x_expected = x
+    # seq_axpy(SIZE, SIZE, alpha, x_expected, y)
+    # @test convert(Base.Array, dx)≈x_expected rtol=1e-1
+    res = JACC.parallel_reduce((SIZE, SIZE), dot_2d, dx, dy)
+    # @test res≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
+    @test res≈seq_dot(SIZE, SIZE, x, y) rtol=1e-1
 end
 
 @testset "LaunchSpec" begin
