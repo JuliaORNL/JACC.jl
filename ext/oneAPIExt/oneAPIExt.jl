@@ -364,7 +364,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
         shared_mem[sid] = tmp
     end
     barrier()
-    if (ti <= 8 && tj <= 8 && ti + 8 <= M && tj + 8 <= N)
+    if (ti <= 8 && tj <= 8)
         shared_mem[sid] = op(
             shared_mem[sid], shared_mem[((ti + 7) * 16) + (tj + 8)])
         shared_mem[sid] = op(
@@ -372,7 +372,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 7) * 16) + tj])
     end
     barrier()
-    if (ti <= 4 && tj <= 4 && ti + 4 <= M && tj + 4 <= N)
+    if (ti <= 4 && tj <= 4)
         shared_mem[sid] = op(
             shared_mem[sid], shared_mem[((ti + 3) * 16) + (tj + 4)])
         shared_mem[sid] = op(
@@ -380,7 +380,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 3) * 16) + tj])
     end
     barrier()
-    if (ti <= 2 && tj <= 2 && ti + 2 <= M && tj + 2 <= N)
+    if (ti <= 2 && tj <= 2)
         shared_mem[sid] = op(
             shared_mem[sid], shared_mem[((ti + 1) * 16) + (tj + 2)])
         shared_mem[sid] = op(
@@ -388,7 +388,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
         shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 1) * 16) + tj])
     end
     barrier()
-    if (ti == 1 && tj == 1 && ti + 1 <= M && tj + 1 <= N)
+    if (ti == 1 && tj == 1)
         shared_mem[sid] = op(shared_mem[sid], shared_mem[ti * 16 + (tj + 1)])
         shared_mem[sid] = op(
             shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 1)])
