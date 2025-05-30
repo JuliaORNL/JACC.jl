@@ -643,9 +643,9 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(x::CuDeviceArray{T, N}) where {T, N}
+function JACC.shared(::CUDABackend, x::AbstractArray)
     size = length(x)
-    shmem = CuDynamicSharedArray(T, size)
+    shmem = CuDynamicSharedArray(eltype(x), size)
     num_threads = blockDim().x * blockDim().y
     if (size <= num_threads)
         if blockDim().y == 1
@@ -694,6 +694,8 @@ function JACC.shared(x::CuDeviceArray{T, N}) where {T, N}
     sync_threads()
     return shmem
 end
+
+JACC.sync_workgroup(::CUDABackend) = CUDA.sync_threads()
 
 JACC.array_type(::CUDABackend) = CUDA.CuArray
 

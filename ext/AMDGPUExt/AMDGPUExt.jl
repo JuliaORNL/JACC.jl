@@ -640,9 +640,9 @@ function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(x::ROCDeviceArray{T, N}) where {T, N}
+function JACC.shared(::AMDGPUBackend, x::AbstractArray)
     size = length(x)
-    shmem = @ROCDynamicLocalArray(T, size)
+    shmem = @ROCDynamicLocalArray(eltype(x), size)
     num_threads = workgroupDim().x * workgroupDim().y
     if (size <= num_threads)
         if workgroupDim().y == 1
@@ -685,6 +685,8 @@ function JACC.shared(x::ROCDeviceArray{T, N}) where {T, N}
     AMDGPU.sync_workgroup()
     return shmem
 end
+
+JACC.sync_workgroup(::AMDGPUBackend) = AMDGPU.sync_workgroup()
 
 JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray
 

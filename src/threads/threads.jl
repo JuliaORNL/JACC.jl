@@ -149,8 +149,14 @@ function JACC.parallel_reduce(
     return reducer.workspace.ret
 end
 
+function JACC.sync_workgroup(::ThreadsBackend)
+    @warn "JACC.sync_workgroup does nothing on Threads backend."
+end
+
 JACC.array_type(::ThreadsBackend) = Base.Array
 
 JACC.array(::ThreadsBackend, x::Base.Array) = x
+
+JACC.shared(::ThreadsBackend, x::AbstractArray) = x
 
 end
