@@ -17,7 +17,7 @@ include("blas.jl")
 using .BLAS
 
 include("multi.jl")
-using .Multi
+# using .Multi
 
 include("async.jl")
 using .Async
