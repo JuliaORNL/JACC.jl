@@ -5,10 +5,7 @@ using JACC, oneAPI, oneAPI.oneL0
 
 # overloaded array functions
 include("array.jl")
-
-# overloaded experimental functions
 include("experimental/experimental.jl")
-using .Experimental
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
 

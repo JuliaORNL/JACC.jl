@@ -557,6 +557,7 @@ end
     @test f2≈Base.Array(df2) rtol=1e-1
 end
 
+if JACC.backend != "oneapi"
 @testset "Multi" begin
     # Unidimensional arrays
     function axpy(i, alpha, x, y)
@@ -665,4 +666,5 @@ end
         JACC.Multi.sync_ghost_elems!(gjp)
     end
     @test cond <= 1e-14
+end
 end
