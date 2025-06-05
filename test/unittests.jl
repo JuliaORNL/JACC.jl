@@ -6,8 +6,8 @@ function seq_axpy(N, alpha, x, y)
 end
 
 function seq_axpy(M, N, alpha, x, y)
-    for i in 1:M
-        for j in 1:N
+    for j in 1:N
+        for i in 1:M
             @inbounds x[i, j] += alpha * y[i, j]
         end
     end
@@ -23,8 +23,8 @@ end
 
 function seq_dot(M, N, x, y)
     r = 0.0
-    for i in 1:M
-        for j in 1:N
+    for j in 1:N
+        for i in 1:M
             @inbounds r += x[i, j] * y[i, j]
         end
     end
