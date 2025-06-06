@@ -1,4 +1,36 @@
 
+function seq_axpy(N, alpha, x, y)
+    for i in 1:N
+        @inbounds x[i] += alpha * y[i]
+    end
+end
+
+function seq_axpy(M, N, alpha, x, y)
+    for j in 1:N
+        for i in 1:M
+            @inbounds x[i, j] += alpha * y[i, j]
+        end
+    end
+end
+
+function seq_dot(N, x, y)
+    r = 0.0
+    for i in 1:N
+        @inbounds r += x[i] * y[i]
+    end
+    return r
+end
+
+function seq_dot(M, N, x, y)
+    r = 0.0
+    for j in 1:N
+        for i in 1:M
+            @inbounds r += x[i, j] * y[i, j]
+        end
+    end
+    return r
+end
+
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
@@ -20,12 +52,6 @@ end
 @testset "AXPY" begin
     function axpy(i, alpha, x, y)
         @inbounds x[i] += alpha * y[i]
-    end
-
-    function seq_axpy(N, alpha, x, y)
-        @inbounds for i in 1:N
-            x[i] += alpha * y[i]
-        end
     end
 
     alpha = 2.5
@@ -256,20 +282,6 @@ end
 end
 
 @testset "JACC.BLAS" begin
-    function seq_axpy(N, alpha, x, y)
-        for i in 1:N
-            @inbounds x[i] += alpha * y[i]
-        end
-    end
-
-    function seq_dot(N, x, y)
-        r = 0.0
-        for i in 1:N
-            @inbounds r += x[i] * y[i]
-        end
-        return r
-    end
-
     x = ones(1_000)
     y = ones(1_000)
     jx = JACC.ones(1_000)
@@ -396,7 +408,7 @@ end
         elseif i == SIZE
             y[i] = a3[i] * x[i - 1] + a2[i] * x[i]
         elseif i > 1 && i < SIZE
-            y[i] = a3[i] * x[i - 1] + a1[i] * +x[i] + a1[i] * +x[i + 1]
+            y[i] = a3[i] * x[i - 1] + a2[i] * +x[i] + a1[i] * +x[i + 1]
         end
     end
 
@@ -569,4 +581,116 @@ end
     lbm_threads(f, f1, f2, t, w, cx, cy, SIZE)
 
     @test f2≈Base.Array(df2) rtol=1e-1
+end
+
+if JACC.backend != "oneapi"
+@testset "Multi" begin
+    # Unidimensional arrays
+    function axpy(i, alpha, x, y)
+        x[i] += alpha * y[i]
+    end
+    function dot(i, x, y)
+        return x[i] * y[i]
+    end
+    SIZE = 10
+    x = round.(rand(Float64, SIZE) * 100)
+    y = round.(rand(Float64, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array(x)
+    dy = JACC.Multi.array(y)
+    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx, dy)
+    x_expected = x
+    seq_axpy(SIZE, alpha, x_expected, y)
+    @test convert(Base.Array, dx)≈x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce(SIZE, dot, dx, dy)
+    @test res≈seq_dot(SIZE, x_expected, y) rtol=1e-1
+
+    # Multidimensional arrays
+    function axpy_2d(i, j, alpha, x, y)
+        x[i, j] += alpha * y[i, j]
+    end
+    function dot_2d(i, j, x, y)
+        return x[i, j] * y[i, j]
+    end
+    SIZE = 10
+    x = round.(rand(Float64, SIZE, SIZE) * 100)
+    y = round.(rand(Float64, SIZE, SIZE) * 100)
+    alpha = 2.5
+    dx = JACC.Multi.array(x)
+    dy = JACC.Multi.array(y)
+    JACC.Multi.parallel_for((SIZE, SIZE), axpy_2d, alpha, dx, dy)
+    x_expected = x
+    seq_axpy(SIZE, SIZE, alpha, x_expected, y)
+    @test convert(Base.Array, dx)≈x_expected rtol=1e-1
+    res = JACC.Multi.parallel_reduce((SIZE, SIZE), dot_2d, dx, dy)
+    @test res≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
+
+    # HPCG example
+    function matvecmul(i, a1, a2, a3, x, y, SIZE, ndev)
+        ind = JACC.Multi.ghost_shift(i, a1)
+        dev_id = JACC.Multi.device_id(a1)
+        if dev_id == 1 && i == 1
+            y[ind] = a2[ind] * x[ind] + a1[ind] * x[ind + 1]
+        elseif dev_id == ndev && i == SIZE
+            y[ind] = a3[ind] * x[ind - 1] + a2[ind] * x[ind]
+        else
+            y[ind] = a3[ind] * x[ind - 1] + a2[ind] * x[ind] +
+                     a1[ind] * x[ind + 1]
+        end
+    end
+
+    SIZE = 10
+    # Initialization of inputs
+    a1 = ones(SIZE)
+    a2 = ones(SIZE)
+    a3 = ones(SIZE)
+    r = ones(SIZE)
+    p = ones(SIZE)
+    s = zeros(SIZE)
+    x = zeros(SIZE)
+    r_old = zeros(SIZE)
+    r_aux = zeros(SIZE)
+    a2 = a2 * 4
+    r = r * 0.5
+    p = p * 0.5
+    cond = 1.0
+    ndev = JACC.Multi.ndev()
+    gja1 = JACC.Multi.array(a1; ghost_dims = 1)
+    gja2 = JACC.Multi.array(a2; ghost_dims = 1)
+    gja3 = JACC.Multi.array(a3; ghost_dims = 1)
+    jr = JACC.Multi.array(r)
+    jp = JACC.Multi.array(p)
+    gjp = JACC.Multi.array(p; ghost_dims = 1)
+    js = JACC.Multi.array(s)
+    gjs = JACC.Multi.array(s; ghost_dims = 1)
+    jx = JACC.Multi.array(x)
+    jr_old = JACC.Multi.array(r_old)
+    jr_aux = JACC.Multi.array(r_aux)
+    ssize = JACC.Multi.part_length(jp)
+    # HPCG Algorithm
+    while cond >= 1e-14
+        JACC.Multi.copy!(jr_old, jr)
+        JACC.Multi.parallel_for(
+            SIZE, matvecmul, gja1, gja2, gja3, gjp, gjs, ssize, ndev)
+        JACC.Multi.sync_ghost_elems!(gjs)
+        JACC.Multi.copy!(js, gjs) #js = gjs
+        alpha0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
+        alpha1 = JACC.Multi.parallel_reduce(SIZE, dot, jp, js)
+        alpha = alpha0 / alpha1
+        m_alpha = alpha * (-1.0)
+        JACC.Multi.parallel_for(SIZE, axpy, m_alpha, jr, js)
+        JACC.Multi.parallel_for(SIZE, axpy, alpha, jx, jp)
+        beta0 = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
+        beta1 = JACC.Multi.parallel_reduce(SIZE, dot, jr_old, jr_old)
+        beta = beta0 / beta1
+        JACC.Multi.copy!(jr_aux, jr)
+        JACC.Multi.parallel_for(SIZE, axpy, beta, jr_aux, jp)
+        ccond = JACC.Multi.parallel_reduce(SIZE, dot, jr, jr)
+        cond = ccond
+        JACC.Multi.copy!(jp, jr_aux)
+        JACC.Multi.copy!(gjp, jp) #gjp = jp
+        JACC.Multi.sync_ghost_elems!(gjp)
+    end
+    @test cond <= 1e-14
+end
 end

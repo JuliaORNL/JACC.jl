@@ -7,32 +7,32 @@ function ndev()
     return ndev(JACC.default_backend())
 end
 
-function array(x::Base.Array{T, N}) where {T, N}
-    return array(JACC.default_backend(), x)
+function part_length(x)
+    return part_length(JACC.default_backend(), x)
 end
 
-function gArray(x::Base.Array{T, N}) where {T, N}
-    return gArray(JACC.default_backend(), x)
+function device_id(x)
+    return device_id(JACC.default_backend(), x)
 end
 
-function gid(dev_id::Integer, i::Integer, ndev::Integer)
-    return gid(JACC.default_backend(), dev_id, i, ndev)
+function multi_array_type()
+    return multi_array_type(JACC.default_backend())
 end
 
-function gswap(x::Vector{Any})
-    return gswap(JACC.default_backend(), x)
+function array(x::Base.Array; ghost_dims = 0)
+    return array(JACC.default_backend(), x; ghost_dims=ghost_dims)
 end
 
-function gcopytoarray(x::Vector{Any}, y::Vector{Any})
-    return gcopytoarray(JACC.default_backend(), x, y)
+function ghost_shift(idx::Union{Integer,NTuple{2,Integer}}, arr)
+    return ghost_shift(JACC.default_backend(), idx, arr)
 end
 
-function copytogarray(x::Vector{Any}, y::Vector{Any})
-    return copytogarray(JACC.default_backend(), x, y)
+function sync_ghost_elems!(arr)
+    return sync_ghost_elems!(JACC.default_backend(), arr)
 end
 
-function copy(x::Vector{Any}, y::Vector{Any})
-    return copy(JACC.default_backend(), x, y)
+function copy!(dest, src)
+    return copy!(JACC.default_backend(), dest, src)
 end
 
 function parallel_for(N::Integer, f::Callable, x...)
@@ -50,5 +50,4 @@ end
 function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
     return parallel_reduce(JACC.default_backend(), (M, N), f, x...)
 end
-
 end # module Multi

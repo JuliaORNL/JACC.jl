@@ -12,18 +12,10 @@ function get_backend end
 default_backend() = get_backend(_backend_dispatchable)
 
 include("array.jl")
-
 include("blas.jl")
-using .BLAS
-
 include("multi.jl")
-using .Multi
-
 include("async.jl")
-using .Async
-
 include("experimental/experimental.jl")
-using .Experimental
 
 export array_type, array
 export default_float

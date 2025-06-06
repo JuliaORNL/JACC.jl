@@ -1,14 +1,10 @@
 module ThreadsImpl
 
 import Base: Callable
-using JACC
+import JACC
+import JACC: LaunchSpec
 
 struct ThreadsBackend end
-
-include("array.jl")
-include("multi.jl")
-include("async.jl")
-include("experimental/experimental.jl")
 
 JACC.get_backend(::Val{:threads}) = ThreadsBackend()
 
@@ -25,6 +21,11 @@ end
 macro maybe_threaded(ex)
     esc(_maybe_threaded(ex))
 end
+
+include("array.jl")
+include("multi.jl")
+include("async.jl")
+include("experimental/experimental.jl")
 
 synchronize(::ThreadsBackend) = nothing
 
