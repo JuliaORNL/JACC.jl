@@ -25,7 +25,7 @@ oneAPIExt = ["oneAPI"]
 [compat]
 AMDGPU = "1"
 Atomix = "1.0.1"
-CUDA = "=5.6.1"
+CUDA = "5"
 Pkg = "1.11.0"
 Preferences = "1.4.0"
 julia = "1.11"
