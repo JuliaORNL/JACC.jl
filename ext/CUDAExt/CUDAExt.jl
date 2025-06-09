@@ -19,6 +19,10 @@ function JACC.synchronize(::CUDABackend; stream = default_stream())
     CUDA.synchronize(stream)
 end
 
+@inline function max_shmem_size()
+    attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+end
+
 @inline kernel_args(args...) = cudaconvert.((args))
 
 @inline function kernel_maxthreads(kernel_function, kargs)
@@ -33,7 +37,7 @@ function JACC.parallel_for(::CUDABackend, N::Integer, f::Callable, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda, kargs)
     threads = min(N, maxThreads)
     blocks = cld(N, threads)
-    shmem_size = 2 * threads * sizeof(Float64)
+    shmem_size = max_shmem_size()
     CUDA.@sync kernel(
         kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
 end
@@ -49,7 +53,7 @@ function JACC.parallel_for(
         spec.blocks = cld(N, spec.threads)
     end
     if spec.shmem_size == 0
-        spec.shmem_size = 2 * spec.threads * sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
     kernel(kargs...; threads = spec.threads, blocks = spec.blocks,
         shmem = spec.shmem_size, stream = spec.stream)
@@ -114,7 +118,7 @@ function JACC.parallel_for(
     threads = (x_thr, y_thr)
     blocks = (cld(m, x_thr), cld(n, y_thr))
 
-    shmem_size = 2 * x_thr * y_thr * sizeof(Float64)
+    shmem_size = max_shmem_size()
 
     CUDA.@sync kernel(
         kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
@@ -162,8 +166,7 @@ function JACC.parallel_for(
     end
 
     if spec.shmem_size == 0
-        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
-                          sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
 
     kernel(kargs...; threads = spec.threads, blocks = spec.blocks,
@@ -184,7 +187,7 @@ function JACC.parallel_for(
     Lblocks = cld(L, Lthreads)
     Mblocks = cld(M, Mthreads)
     Nblocks = cld(N, Nthreads)
-    shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
+    shmem_size = max_shmem_size()
     CUDA.@sync @cuda threads=(Lthreads, Mthreads, Nthreads) blocks=(
         Lblocks, Mblocks, Nblocks) shmem=shmem_size _parallel_for_cuda_LMN(
         (L, M, N), f, x...)
@@ -207,8 +210,7 @@ function JACC.parallel_for(
         spec.blocks = (Lblocks, Mblocks, Nblocks)
     end
     if spec.shmem_size == 0
-        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
-                          spec.threads[3] * sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
     @cuda threads=spec.threads blocks=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_for_cuda_LMN(
         (L, M, N), f, x...)

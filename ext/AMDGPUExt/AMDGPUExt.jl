@@ -2,6 +2,7 @@ module AMDGPUExt
 
 import Base: Callable
 using JACC, AMDGPU
+using AMDGPU: HIP
 
 const AMDGPUBackend = ROCBackend
 
@@ -16,12 +17,16 @@ default_stream() = AMDGPU.stream()
 
 JACC.default_stream(::Type{AMDGPUBackend}) = default_stream()
 
+@inline function max_shmem_size()
+    return HIP.properties(AMDGPU.device()).sharedMemPerBlock
+end
+
 function JACC.parallel_for(::AMDGPUBackend, N::Integer, f::Callable, x...)
     kernel = @roc launch=false _parallel_for_amdgpu(N, f, x...)
     config = AMDGPU.launch_configuration(kernel)
     threads = min(N, config.groupsize)
     blocks = cld(N, threads)
-    shmem_size = 2 * threads * sizeof(Float64)
+    shmem_size = max_shmem_size()
     kernel(
         N, f, x...; groupsize = threads, gridsize = blocks, shmem = shmem_size)
     AMDGPU.synchronize()
@@ -38,7 +43,7 @@ function JACC.parallel_for(
         spec.blocks = cld(N, spec.threads)
     end
     if spec.shmem_size == nothing
-        spec.shmem_size = 2 * spec.threads * sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
     kernel(
         N, f, x...; groupsize = spec.threads, gridsize = spec.blocks,
@@ -101,7 +106,7 @@ function JACC.parallel_for(
     threads = (x_thr, y_thr)
     blocks = (cld(m, x_thr), cld(n, y_thr))
 
-    shmem_size = 2 * x_thr * y_thr * sizeof(Float64)
+    shmem_size = max_shmem_size()
     kernel(indexer, (M, N), f, x...; groupsize = threads,
         gridsize = blocks, shmem = shmem_size)
     AMDGPU.synchronize()
@@ -149,8 +154,7 @@ function JACC.parallel_for(
     end
 
     if spec.shmem_size == 0
-        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
-                          sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
 
     kernel(indexer, (M, N), f, x...; groupsize = spec.threads,
@@ -169,9 +173,7 @@ function JACC.parallel_for(
     Lblocks = cld(L, Lthreads)
     Mblocks = cld(M, Mthreads)
     Nblocks = cld(N, Nthreads)
-    # shmem_size = attribute(device(),CUDA.DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    # We must know how to get the max shared memory to be used in AMDGPU as it is done in CUDA
-    shmem_size = 2 * Lthreads * Mthreads * Nthreads * sizeof(Float64)
+    shmem_size = max_shmem_size()
     @roc groupsize=(Lthreads, Mthreads, Nthreads) gridsize=(
         Lblocks, Mblocks, Nblocks) shmem=shmem_size _parallel_for_amdgpu_LMN(
         (L, M, N), f, x...)
@@ -195,8 +197,7 @@ function JACC.parallel_for(
         spec.blocks = (Lblocks, Mblocks, Nblocks)
     end
     if spec.shmem_size == 0
-        spec.shmem_size = 2 * spec.threads[1] * spec.threads[2] *
-                          spec.threads[3] * sizeof(Float64)
+        spec.shmem_size = max_shmem_size()
     end
     @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_for_amdgpu_LMN(
         (L, M, N), f, x...)
