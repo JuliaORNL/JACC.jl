@@ -12,7 +12,7 @@ ends](https://juliagpu.org/), and [package
 extensions](https://julialang.org/blog/2023/04/julia-1.9-highlights/#package_extensions)
 since Julia v1.9 . Similar to portable layers like Kokkos, users would pass a
 size and a function including its arguments to a `parallel_for` or
-`parallel_reduce` function.  The overall goal is to write a single source code
+`parallel_reduce` function. The overall goal is to write a single source code
 that can be executed on multiple vendor CPU and GPU parallel programming
 environments. JACC meant to simplify CPU/GPU kernel programming using a simple
 application programming interface (API).
@@ -72,8 +72,8 @@ application programming interface (API).
 
 ## Resources
 
-- For an app integration example see the [GrayScott.jl JACC branch](https://github.com/JuliaORNL/GrayScott.jl/tree/GrayScott-JACC) and the
-  [Simulation.jl code](https://github.com/JuliaORNL/GrayScott.jl/blob/GrayScott-JACC/src/simulation/Simulation.jl)
+- For an app integration example see the [GrayScott.jl](https://github.com/JuliaORNL/GrayScott.jl) and the
+  [Simulation.jl code](https://github.com/JuliaORNL/GrayScott.jl/blob/main/src/simulation/Simulation.jl) and search for `JACC` keyword.
   for writing kernels with JACC.jl and selecting specific vendor back ends in Julia.
 - JuliaCon 2023 presentation [video](https://live.juliacon.org/talk/AY8EUX).
 - SC24 JACC [Best Research Poster Finalist](https://sc24.supercomputing.org/proceedings/poster/poster_pages/post113.html)
@@ -81,10 +81,11 @@ application programming interface (API).
   and [paper](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400b955/555400b955.pdf)
 - MiniVATES.jl proxy application [repository](https://github.com/JuliaORNL/MiniVATES.jl)
   and SC24 XLOOP [best paper using JACC.jl](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400c107/555400c107.pdf)
+- [OLCF Tutorial 2025](https://www.olcf.ornl.gov/calendar/juliaforsci2025/)
 
 ## Citation
 
-If you find JACC.jl useful please cite the following paper:
+If you find JACC.jl useful please cite the following paper from [SC24-WAACPD](https://doi.org/10.1109/SCW63240.2024.00245), open version available [here](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400b955/555400b955.pdf).
 
 ```
 @INPROCEEDINGS{JACC,
@@ -104,9 +105,9 @@ If you find JACC.jl useful please cite the following paper:
 Funded by the US Department of Energy Advanced Scientific Computing Research
 (ASCR) projects:
 
-- S4PST and PESO as part of the Next Generation of Scientific Software
-  Technologies (NGSST)
-- ASCR Competitive Portfolios for Advanced Scientific Computing Research
+- [S4PST](https://s4pst.org/) and [PESO](https://pesoproject.org/) as part of the Next Generation of Scientific Software Technologies (NGSST) ASCR Program. 
+- NGSST sponsors the Consortium for the Advancement of Scientific Software, [CASS](https://cass.community/)
+- ASCR Competitive Portfolios for Advanced Scientific Computing Research, MAGMA
 
 Former sponsors:
 
