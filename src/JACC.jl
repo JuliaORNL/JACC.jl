@@ -27,6 +27,8 @@ export synchronize
 
 function default_stream end
 
+const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
+
 @kwdef mutable struct LaunchSpec{Backend}
     stream = default_stream(Backend)
     threads = 0
@@ -51,16 +53,16 @@ default_float() = default_float(default_backend())
 
 synchronize(; kw...) = synchronize(default_backend(); kw...)
 
-function parallel_for(N::Integer, f::Callable, x...)
-    return parallel_for(default_backend(), N, f, x...)
+function parallel_for(dims::Dims, f::Callable, x...)
+    return parallel_for(default_backend(), dims, f, x...)
 end
 
-function parallel_for((M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return parallel_for(default_backend(), (M, N), f, x...)
+@inline function parallel_for(f::Callable, dims::Dims, x...)
+    return parallel_for(dims, f, x...)
 end
 
-function parallel_for((L, M, N)::NTuple{3, Integer}, f::Callable, x...)
-    return parallel_for(default_backend(), (L, M, N), f, x...)
+@inline function parallel_for(f::Callable, spec::LaunchSpec, dims::Dims, x...)
+    return parallel_for(spec, dims, f, x...)
 end
 
 default_init(::Type{T}, ::typeof(+)) where {T} = zero(T)
@@ -74,8 +76,6 @@ abstract type ReduceWorkspace end
 reduce_workspace() = reduce_workspace(default_backend(), default_float()())
 
 reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
-
-const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
 
 @kwdef mutable struct ParallelReduce{Backend, T}
     dims::Dims = 0
