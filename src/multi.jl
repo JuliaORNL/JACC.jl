@@ -20,10 +20,10 @@ function multi_array_type()
 end
 
 function array(x::Base.Array; ghost_dims = 0)
-    return array(JACC.default_backend(), x; ghost_dims=ghost_dims)
+    return array(JACC.default_backend(), x; ghost_dims = ghost_dims)
 end
 
-function ghost_shift(idx::Union{Integer,NTuple{2,Integer}}, arr)
+function ghost_shift(idx::Union{Integer, NTuple{2, Integer}}, arr)
     return ghost_shift(JACC.default_backend(), idx, arr)
 end
 
@@ -39,8 +39,16 @@ function parallel_for(N::Integer, f::Callable, x...)
     return parallel_for(JACC.default_backend(), N, f, x...)
 end
 
+@inline function parallel_for(f::Callable, N::Integer, x...)
+    return parallel_for(N, f, x...)
+end
+
 function parallel_for((M, N)::NTuple{2, Integer}, f::Callable, x...)
     return parallel_for(JACC.default_backend(), (M, N), f, x...)
+end
+
+@inline function parallel_for(f::Callable, (M, N)::NTuple{2, Integer}, x...)
+    return parallel_for((M, N), f, x...)
 end
 
 function parallel_reduce(N::Integer, f::Callable, x...)

@@ -666,7 +666,9 @@ if JACC.backend != "oneapi"
     alpha = 2.5
     dx = JACC.Multi.array(x)
     dy = JACC.Multi.array(y)
-    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx, dy)
+    JACC.Multi.parallel_for(SIZE, alpha, dx, dy) do i, alpha, x, y
+        x[i] += alpha * y[i]
+    end
     x_expected = x
     seq_axpy(SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
@@ -674,9 +676,6 @@ if JACC.backend != "oneapi"
     @test res≈seq_dot(SIZE, x_expected, y) rtol=1e-1
 
     # Multidimensional arrays
-    function axpy_2d(i, j, alpha, x, y)
-        x[i, j] += alpha * y[i, j]
-    end
     function dot_2d(i, j, x, y)
         return x[i, j] * y[i, j]
     end
@@ -686,7 +685,9 @@ if JACC.backend != "oneapi"
     alpha = 2.5
     dx = JACC.Multi.array(x)
     dy = JACC.Multi.array(y)
-    JACC.Multi.parallel_for((SIZE, SIZE), axpy_2d, alpha, dx, dy)
+    JACC.Multi.parallel_for((SIZE, SIZE), alpha, dx, dy) do i, j, alpha, x, y
+        x[i, j] += alpha * y[i, j]
+    end
     x_expected = x
     seq_axpy(SIZE, SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
