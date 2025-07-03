@@ -401,6 +401,74 @@ end
     @test Base.Array(C)≈C_expected rtol=1e-5
 end
 
+@testset "do" begin
+    L = 10
+    M = 10
+    N = 10
+
+    a = round.(rand(Float32, N) * 100)
+    a_expected = a .+ 5.0
+
+    a_device = JACC.array(a)
+    JACC.parallel_for(N, a_device) do i, a
+        @inbounds a[i] += 5.0
+    end
+
+    @test Base.Array(a_device)≈a_expected rtol=1e-5
+
+    A2 = JACC.ones(Float32, M, N)
+    B2 = JACC.ones(Float32, M, N)
+    C2 = JACC.zeros(Float32, M, N)
+    JACC.parallel_for((M, N), A2, B2, C2) do i, j, A, B, C
+        @inbounds C[i, j] = A[i, j] + B[i, j]
+    end
+    C2_expected = Float32(2.0) .* ones(Float32, M, N)
+    @test Base.Array(C2)≈C2_expected rtol=1e-5
+
+    A3 = JACC.ones(Float32, L, M, N)
+    B3 = JACC.ones(Float32, L, M, N)
+    C3 = JACC.zeros(Float32, L, M, N)
+
+    JACC.parallel_for((L, M, N), A3, B3, C3) do i, j, k, A, B, C
+        @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
+    end
+
+    C3_expected = Float32(2.0) .* ones(Float32, L, M, N)
+    @test Base.Array(C3)≈C3_expected rtol=1e-5
+
+    # 1D
+    N = 100
+    a = round.(rand(Float32, N) * 100)
+    a_expected = a .+ 5.0
+    a_device = JACC.array(a)
+    JACC.parallel_for(JACC.launch_spec(; threads = 1000), N, a_device) do i, a
+        @inbounds a[i] += 5.0
+    end
+    @test Base.Array(a_device)≈a_expected rtol=1e-5
+
+    # 2D
+    A = JACC.ones(Float32, N, N)
+    B = JACC.ones(Float32, N, N)
+    C = JACC.zeros(Float32, N, N)
+    JACC.parallel_for(JACC.launch_spec(; threads = (16, 16)),
+        (N, N), A, B, C) do i, j, A, B, C
+        @inbounds C[i, j] = A[i, j] + B[i, j]
+    end
+    C_expected = Float32(2.0) .* ones(Float32, N, N)
+    @test Base.Array(C)≈C_expected rtol=1e-5
+
+    # 3D
+    A = JACC.ones(Float32, N, N, N)
+    B = JACC.ones(Float32, N, N, N)
+    C = JACC.zeros(Float32, N, N, N)
+    JACC.parallel_for(JACC.launch_spec(; threads = (4, 4, 4)),
+        (N, N, N), A, B, C) do i, j, k, A, B, C
+        @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
+    end
+    C_expected = Float32(2.0) .* ones(Float32, N, N, N)
+    @test Base.Array(C)≈C_expected rtol=1e-5
+end
+
 @testset "CG" begin
     function matvecmul(i, a1, a2, a3, x, y, SIZE)
         if i == 1
@@ -598,7 +666,9 @@ if JACC.backend != "oneapi"
     alpha = 2.5
     dx = JACC.Multi.array(x)
     dy = JACC.Multi.array(y)
-    JACC.Multi.parallel_for(SIZE, axpy, alpha, dx, dy)
+    JACC.Multi.parallel_for(SIZE, alpha, dx, dy) do i, alpha, x, y
+        x[i] += alpha * y[i]
+    end
     x_expected = x
     seq_axpy(SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
@@ -606,9 +676,6 @@ if JACC.backend != "oneapi"
     @test res≈seq_dot(SIZE, x_expected, y) rtol=1e-1
 
     # Multidimensional arrays
-    function axpy_2d(i, j, alpha, x, y)
-        x[i, j] += alpha * y[i, j]
-    end
     function dot_2d(i, j, x, y)
         return x[i, j] * y[i, j]
     end
@@ -618,7 +685,9 @@ if JACC.backend != "oneapi"
     alpha = 2.5
     dx = JACC.Multi.array(x)
     dy = JACC.Multi.array(y)
-    JACC.Multi.parallel_for((SIZE, SIZE), axpy_2d, alpha, dx, dy)
+    JACC.Multi.parallel_for((SIZE, SIZE), alpha, dx, dy) do i, j, alpha, x, y
+        x[i, j] += alpha * y[i, j]
+    end
     x_expected = x
     seq_axpy(SIZE, SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
