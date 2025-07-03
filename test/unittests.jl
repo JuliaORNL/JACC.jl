@@ -210,6 +210,7 @@ end
         (i, a) -> begin
             @inbounds a[i] += 5.0
         end, a_device)
+    JACC.synchronize()
     @test Base.Array(a_device)≈a_expected rtol=1e-5
 
     # 2D
@@ -222,6 +223,7 @@ end
         end,
         A, B, C)
     C_expected = Float32(2.0) .* ones(Float32, N, N)
+    JACC.synchronize()
     @test Base.Array(C)≈C_expected rtol=1e-5
 
     # 3D
@@ -234,6 +236,7 @@ end
         end,
         A, B, C)
     C_expected = Float32(2.0) .* ones(Float32, N, N, N)
+    JACC.synchronize()
     @test Base.Array(C)≈C_expected rtol=1e-5
 
     # reduce

@@ -27,7 +27,7 @@ include("multi.jl")
 include("async.jl")
 include("experimental/experimental.jl")
 
-synchronize(::ThreadsBackend) = nothing
+JACC.synchronize(::ThreadsBackend) = nothing
 
 JACC.default_stream(::Type{ThreadsBackend}) = nothing
 
