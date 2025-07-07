@@ -1,8 +1,4 @@
 
-function JACC.zeros(::ThreadsBackend, T, dims...)
-    return Base.zeros(T, dims...)
-end
-
-function JACC.ones(::ThreadsBackend, T, dims...)
-    return Base.ones(T, dims...)
-end
+JACC.zeros(::ThreadsBackend, T, dims...) = Base.zeros(T, dims...)
+JACC.ones(::ThreadsBackend, T, dims...) = Base.ones(T, dims...)
+JACC.fill(::ThreadsBackend, value, dims...) = Base.fill(value, dims...)

@@ -100,6 +100,14 @@ end
     @test zeros(N)≈Base.Array(x) rtol=1e-5
 end
 
+@testset "fill" begin
+    N = 10
+    x = JACC.fill(10.0, N)
+    @test fill(10.0, N)≈Base.Array(x) rtol=1e-5
+    fill!(x, 22.2)
+    @test fill(22.2, N)≈Base.Array(x) rtol=1e-5
+end
+
 # using Cthulhu
 @testset "AtomicCounter" begin
     function axpy_counter!(i, alpha, x, y, counter)
