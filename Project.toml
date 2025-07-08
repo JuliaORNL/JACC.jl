@@ -3,12 +3,13 @@ uuid = "0979c8fe-16a4-4796-9b82-89a9f10403ea"
 authors = [
     "pedrovalerolara <valerolarap@ornl.gov>",
     "williamfgc <williamfgc@yahoo.com>",
-    "PhilipFackler <facklerpw@ornl.gov>",
+    "PhilipFackler <facklerpw@ornl.gov>"
 ]
-version = "0.1.1"
+version = "0.4.0"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 
 [weakdeps]
@@ -17,13 +18,15 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
 
 [extensions]
-JACCAMDGPU = ["AMDGPU"]
-JACCCUDA = ["CUDA"]
-JACCONEAPI = ["oneAPI"]
+AMDGPUExt = ["AMDGPU"]
+CUDAExt = ["CUDA"]
+oneAPIExt = ["oneAPI"]
 
 [compat]
-AMDGPU = "1.1.6"
+AMDGPU = "1"
 Atomix = "1.0.1"
 CUDA = "5"
+Pkg = "1.11.0"
 Preferences = "1.4.0"
-julia = "1.9, 1.10, 1.11"
+julia = "1.11"
+oneAPI = "2.0.3"

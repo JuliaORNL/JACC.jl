@@ -1,108 +1,49 @@
 
 module JACC
 
+import Base: Callable
 import Atomix: @atomic
 
 # module to set backend preferences 
-include("JACCPreferences.jl")
+include("preferences.jl")
 
-default_backend() = get_backend(JACCPreferences._backend_dispatchable)
+function get_backend end
 
-struct ThreadsBackend end
+default_backend() = get_backend(_backend_dispatchable)
 
-include("helper.jl")
-# overloaded array functions
 include("array.jl")
-
-include("JACCBLAS.jl")
-using .BLAS
-
-include("JACCMULTI.jl")
-using .Multi
-
-include("JACCASYNC.jl")
-using .Async
-
-include("JACCEXPERIMENTAL.jl")
-using .Experimental
-
-get_backend(::Val{:threads}) = ThreadsBackend()
+include("blas.jl")
+include("multi.jl")
+include("async.jl")
+include("experimental/experimental.jl")
 
 export array_type, array
 export default_float
 export @atomic
 export parallel_for, parallel_reduce
 export shared
+export LaunchSpec
+export synchronize
 
-function parallel_for(
-        ::ThreadsBackend, N::I, f::F, x...) where {I <: Integer, F <: Function}
-    @maybe_threaded for i in 1:N
-        f(i, x...)
-    end
+function default_stream end
+
+const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
+
+@kwdef mutable struct LaunchSpec{Backend}
+    stream = default_stream(Backend)
+    threads = 0
+    blocks = 0
+    shmem_size::Int = 0
+    sync::Bool = false
 end
 
-function parallel_for(
-        ::ThreadsBackend, (M, N)::Tuple{I, I}, f::F, x...) where {
-        I <: Integer, F <: Function}
-    @maybe_threaded for j in 1:N
-        for i in 1:M
-            f(i, j, x...)
-        end
-    end
-end
-
-function parallel_for(
-        ::ThreadsBackend, (L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {
-        I <: Integer, F <: Function}
-    # only threaded at the first level (no collapse equivalent)
-    @maybe_threaded for k in 1:N
-        for j in 1:M
-            for i in 1:L
-                f(i, j, k, x...)
-            end
-        end
-    end
-end
-
-function parallel_reduce(
-        ::ThreadsBackend, N::Integer, op, f::Function, x...; init)
-    ret = init
-    tmp = fill(init, Threads.nthreads())
-    @maybe_threaded for i in 1:N
-        tmp[Threads.threadid()] = op.(tmp[Threads.threadid()], f(i, x...))
-    end
-    for i in 1:Threads.nthreads()
-        ret = op.(ret, tmp[i])
-    end
-    return ret
-end
-
-function parallel_reduce(
-        ::ThreadsBackend, (M, N)::Tuple{Integer, Integer}, op, f::Function, x...; init)
-    ret = init
-    tmp = fill(init, Threads.nthreads())
-    @maybe_threaded for j in 1:N
-        for i in 1:M
-            tmp[Threads.threadid()] = op.(
-                tmp[Threads.threadid()], f(i, j, x...))
-        end
-    end
-    for i in 1:Threads.nthreads()
-        ret = op.(ret, tmp[i])
-    end
-    return ret
-end
-
-array_type(::ThreadsBackend) = Base.Array
-
-array(::ThreadsBackend, x::Base.Array) = x
+launch_spec(; kw...) = LaunchSpec{typeof(default_backend())}(; kw...)
 
 default_float(::Any) = Float64
 
-function shared(x::Base.Array{T, N}) where {T, N}
-    return x
-end
+shared(x::AbstractArray) = shared(default_backend(), x)
+
+sync_workgroup() = sync_workgroup(default_backend())
 
 array_type() = array_type(default_backend())
 
@@ -110,55 +51,115 @@ array(x::Base.Array) = array(default_backend(), x)
 
 default_float() = default_float(default_backend())
 
-function parallel_for(N::I, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_for(default_backend(), N, f, x...)
+synchronize(; kw...) = synchronize(default_backend(); kw...)
+
+function parallel_for(dims::Dims, f::Callable, x...)
+    return parallel_for(default_backend(), dims, f, x...)
 end
 
-function parallel_for(
-        (M, N)::Tuple{I, I}, f::F, x...) where {I <: Integer, F <: Function}
-    return parallel_for(default_backend(), (M, N), f, x...)
+@inline function parallel_for(f::Callable, dims::Dims, x...)
+    return parallel_for(dims, f, x...)
 end
 
-function parallel_for((L, M, N)::Tuple{I, I, I}, f::F,
-        x...) where {I <: Integer, F <: Function}
-    return parallel_for(default_backend(), (L, M, N), f, x...)
+@inline function parallel_for(f::Callable, spec::LaunchSpec, dims::Dims, x...)
+    return parallel_for(spec, dims, f, x...)
 end
 
 default_init(::Type{T}, ::typeof(+)) where {T} = zero(T)
 default_init(::Type{T}, ::typeof(*)) where {T} = one(T)
-default_init(::Type{T}, ::typeof(max)) where{T} = typemin(T)
-default_init(::Type{T}, ::typeof(min)) where{T} = typemax(T)
-default_init(op::Function) = default_init(default_float(), op)
+default_init(::Type{T}, ::typeof(max)) where {T} = typemin(T)
+default_init(::Type{T}, ::typeof(min)) where {T} = typemax(T)
+default_init(op::Callable) = default_init(default_float(), op)
 
-function parallel_reduce(
-        N::I, op::Function, f::Function, x...; init) where {I <: Integer}
+abstract type ReduceWorkspace end
+
+reduce_workspace() = reduce_workspace(default_backend(), default_float()())
+
+reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
+
+@kwdef mutable struct ParallelReduce{Backend, T}
+    dims::Dims = 0
+    op::Callable = () -> nothing
+    init::T = default_init(op)
+    workspace::ReduceWorkspace = reduce_workspace(Backend(), init)
+    spec::LaunchSpec{Backend} = LaunchSpec{Backend}()
+end
+
+function reducer(; dims, op, init = default_init(op))
+    ParallelReduce{typeof(default_backend()), typeof(init)}(;
+        dims = dims, op = op, init = init)
+end
+
+function reducer(dims::Dims, op::Callable; init = default_init(op))
+    reducer(; dims = dims, op = op, init = init)
+end
+
+function _parallel_reduce! end
+
+@inline function (reducer::ParallelReduce)(f::Callable, x...)
+    _parallel_reduce!(reducer, reducer.dims, f, x...)
+end
+
+@inline function (reducer::ParallelReduce)(a::AbstractArray)
+    reducer(_elem_access(a), a)
+end
+
+function set_init!(reducer::ParallelReduce, init)
+    reducer.init = init
+end
+
+get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
+
+function parallel_reduce(N::Integer, op::Callable, f::Callable, x...; init)
     return parallel_reduce(default_backend(), N, op, f, x...; init = init)
 end
 
-function parallel_reduce((M, N)::Tuple{I, I}, op::Function, f::Function, x...;
-        init) where {I <: Integer}
+function parallel_reduce(
+        (M, N)::NTuple{2, Integer}, op::Callable, f::Callable, x...;
+        init)
     return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
 end
 
-function parallel_reduce(N::Integer, f::Function, x...)
+function parallel_reduce(N::Integer, f::Callable, x...)
     return parallel_reduce(N, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce((M, N)::Tuple{Integer, Integer}, f::Function, x...)
+function parallel_reduce(spec::LaunchSpec, N::Integer, f::Callable, x...)
+    return parallel_reduce(spec, N, +, f, x...; init = default_init(+))
+end
+
+function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
     return parallel_reduce((M, N), +, f, x...; init = default_init(+))
+end
+
+function parallel_reduce(
+        spec::LaunchSpec, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+    return parallel_reduce(spec, (M, N), +, f, x...; init = default_init(+))
 end
 
 array_size(a::AbstractArray) = size(a)
 array_size(a::AbstractVector) = length(a)
 
-elem_access(a::AbstractArray) = (i,j,k,a) -> a[i,j,k]
-elem_access(a::AbstractMatrix) = (i,j,a) -> a[i,j]
-elem_access(a::AbstractVector) = (i,a) -> a[i]
+_elem_access(a::AbstractArray) = (i, j, k, a) -> a[i, j, k]
+_elem_access(a::AbstractMatrix) = (i, j, a) -> a[i, j]
+_elem_access(a::AbstractVector) = (i, a) -> a[i]
 
-function parallel_reduce(op::Function, a::AbstractArray; init = default_init(eltype(a), op))
-    return parallel_reduce(array_size(a), op, elem_access(a), a; init = init)
+function parallel_reduce(
+        op::Callable, a::AbstractArray; init = default_init(eltype(a), op))
+    return parallel_reduce(array_size(a), op, _elem_access(a), a; init = init)
+end
+function parallel_reduce(
+        spec::LaunchSpec, op::Callable, a::AbstractArray; init = default_init(
+            eltype(a), op))
+    return parallel_reduce(
+        spec, array_size(a), op, _elem_access(a), a; init = init)
 end
 
 parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a; kw...)
+function parallel_reduce(spec::LaunchSpec, a::AbstractArray; kw...)
+    parallel_reduce(spec, +, a; kw...)
+end
+
+include("threads/threads.jl")
 
 end # module JACC

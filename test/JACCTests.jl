@@ -3,27 +3,20 @@ module JACCTests
 import JACC
 using ReTest
 
-const backend = JACC.JACCPreferences.backend
-
-@static if backend == "cuda"
-    using CUDA
+@static if JACC.backend == "cuda"
     include("tests_cuda.jl")
-elseif backend == "amdgpu"
-    using AMDGPU
+elseif JACC.backend == "amdgpu"
     include("tests_amdgpu.jl")
-elseif backend == "oneapi"
-    using oneAPI
+elseif JACC.backend == "oneapi"
     include("tests_oneapi.jl")
-elseif backend == "threads"
+elseif JACC.backend == "threads"
     include("tests_threads.jl")
 end
 
 const FloatType = JACC.default_float()
 using ChangePrecision
 @changeprecision FloatType begin
-
-include("unittests.jl")
-
+    include("unittests.jl")
 end # @changeprecision
 
 end
