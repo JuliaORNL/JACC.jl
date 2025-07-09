@@ -160,7 +160,7 @@ function JACC.parallel_reduce(
     groups = cld(N, items)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
     rret = oneAPI.oneArray([init])
-    oneAPI.@sync @oneapi items=items groups=groups _parallel_reduce_oneapi(
+    @oneapi items=items groups=groups _parallel_reduce_oneapi(
         Val(items), N, op, ret, f, x...)
     oneAPI.@sync @oneapi items=items groups=1 reduce_kernel_oneapi(
         Val(items), groups, op, ret, rret)
@@ -176,7 +176,6 @@ function JACC.parallel_reduce(
     rret = oneAPI.oneArray([init])
     @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_reduce_oneapi(
         Val(spec.threads), N, op, ret, f, x...)
-    oneAPI.synchronize(spec.stream)
     @oneapi items=spec.threads groups=1 queue=spec.stream reduce_kernel_oneapi(
         Val(spec.threads), spec.blocks, op, ret, rret)
     if spec.sync
@@ -226,7 +225,7 @@ function JACC.parallel_reduce(
     Ngroups = cld(N, Nitems)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
     rret = oneAPI.oneArray([init])
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
+    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
     oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
         (Mgroups, Ngroups), op, ret, rret)
@@ -246,7 +245,6 @@ function JACC.parallel_reduce(
     rret = oneAPI.oneArray([init])
     @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) queue=spec.stream _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
-    oneAPI.synchronize(spec.stream)
     @oneapi items=(Mitems, Nitems) groups=(1, 1) queue=spec.stream reduce_kernel_oneapi_MN(
         (spec.blocks[1], spec.blocks[2]), op, ret, rret)
     if spec.sync
