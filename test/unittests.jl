@@ -1,36 +1,4 @@
 
-function seq_axpy(N, alpha, x, y)
-    for i in 1:N
-        @inbounds x[i] += alpha * y[i]
-    end
-end
-
-function seq_axpy(M, N, alpha, x, y)
-    for j in 1:N
-        for i in 1:M
-            @inbounds x[i, j] += alpha * y[i, j]
-        end
-    end
-end
-
-function seq_dot(N, x, y)
-    r = 0.0
-    for i in 1:N
-        @inbounds r += x[i] * y[i]
-    end
-    return r
-end
-
-function seq_dot(M, N, x, y)
-    r = 0.0
-    for j in 1:N
-        for i in 1:M
-            @inbounds r += x[i, j] * y[i, j]
-        end
-    end
-    return r
-end
-
 @testset "VectorAddLambda" begin
     function f(i, a)
         @inbounds a[i] += 5.0
@@ -50,10 +18,6 @@ end
 end
 
 @testset "AXPY" begin
-    function axpy(i, alpha, x, y)
-        @inbounds x[i] += alpha * y[i]
-    end
-
     alpha = 2.5
 
     N = 10
@@ -180,30 +144,13 @@ end
     mnd = JACC.parallel_reduce(min, ad2)
     @test mnd == minimum(ah2)
 
-    function seq_dot(M, N, x, y)
-        r = 0.0
-        for i in 1:M
-            for j in 1:N
-                @inbounds r += x[i, j] * y[i, j]
-            end
-        end
-        return r
-    end
-    function dot_2d(i, j, x, y)
-        return x[i, j] * y[i, j]
-    end
     SIZE = 10
     x = round.(rand(Float64, SIZE, SIZE) * 100)
     y = round.(rand(Float64, SIZE, SIZE) * 100)
     alpha = 2.5
     dx = JACC.array(x)
     dy = JACC.array(y)
-    # JACC.Multi.parallel_for((SIZE, SIZE), axpy_2d, alpha, dx, dy)
-    # x_expected = x
-    # seq_axpy(SIZE, SIZE, alpha, x_expected, y)
-    # @test convert(Base.Array, dx)≈x_expected rtol=1e-1
-    res = JACC.parallel_reduce((SIZE, SIZE), dot_2d, dx, dy)
-    # @test res≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
+    res = JACC.parallel_reduce((SIZE, SIZE), dot, dx, dy)
     @test res≈seq_dot(SIZE, SIZE, x, y) rtol=1e-1
 end
 
@@ -491,14 +438,6 @@ end
         end
     end
 
-    function dot(i, x, y)
-        @inbounds return x[i] * y[i]
-    end
-
-    function axpy(i, alpha, x, y)
-        @inbounds x[i] += alpha[1, 1] * y[i]
-    end
-
     SIZE = 10
     a0 = JACC.ones(SIZE)
     a1 = JACC.ones(SIZE)
@@ -665,12 +604,6 @@ end
 if JACC.backend != "oneapi"
 @testset "Multi" begin
     # Unidimensional arrays
-    function axpy(i, alpha, x, y)
-        x[i] += alpha * y[i]
-    end
-    function dot(i, x, y)
-        return x[i] * y[i]
-    end
     SIZE = 10
     x = round.(rand(Float64, SIZE) * 100)
     y = round.(rand(Float64, SIZE) * 100)
@@ -687,9 +620,6 @@ if JACC.backend != "oneapi"
     @test res≈seq_dot(SIZE, x_expected, y) rtol=1e-1
 
     # Multidimensional arrays
-    function dot_2d(i, j, x, y)
-        return x[i, j] * y[i, j]
-    end
     SIZE = 10
     x = round.(rand(Float64, SIZE, SIZE) * 100)
     y = round.(rand(Float64, SIZE, SIZE) * 100)
@@ -702,7 +632,7 @@ if JACC.backend != "oneapi"
     x_expected = x
     seq_axpy(SIZE, SIZE, alpha, x_expected, y)
     @test convert(Base.Array, dx)≈x_expected rtol=1e-1
-    res = JACC.Multi.parallel_reduce((SIZE, SIZE), dot_2d, dx, dy)
+    res = JACC.Multi.parallel_reduce((SIZE, SIZE), dot, dx, dy)
     @test res≈seq_dot(SIZE, SIZE, x_expected, y) rtol=1e-1
 
     # HPCG example
