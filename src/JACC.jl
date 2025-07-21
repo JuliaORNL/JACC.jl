@@ -110,31 +110,28 @@ end
 
 get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
 
-function parallel_reduce(N::Integer, op::Callable, f::Callable, x...; init)
-    return parallel_reduce(default_backend(), N, op, f, x...; init = init)
+function parallel_reduce(dims::Dims, op::Callable, f::Callable, x...; init)
+    return parallel_reduce(default_backend(), dims, op, f, x...; init = init)
 end
 
-function parallel_reduce(
-        (M, N)::NTuple{2, Integer}, op::Callable, f::Callable, x...;
-        init)
-    return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
+function parallel_reduce(dims::Dims, f::Callable, x...)
+    return parallel_reduce(dims, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce(N::Integer, f::Callable, x...)
-    return parallel_reduce(N, +, f, x...; init = default_init(+))
+function parallel_reduce(spec::LaunchSpec, dims::Dims, f::Callable, x...)
+    return parallel_reduce(spec, dims, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce(spec::LaunchSpec, N::Integer, f::Callable, x...)
-    return parallel_reduce(spec, N, +, f, x...; init = default_init(+))
+function parallel_reduce(f::Callable, dims::Dims, op::Callable, x...; init)
+    return parallel_reduce(dims, op, f, x...; init = init)
 end
 
-function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return parallel_reduce((M, N), +, f, x...; init = default_init(+))
+function parallel_reduce(f::Callable, dims::Dims, x...)
+    return parallel_reduce(dims, f, x...)
 end
 
-function parallel_reduce(
-        spec::LaunchSpec, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return parallel_reduce(spec, (M, N), +, f, x...; init = default_init(+))
+function parallel_reduce(f::Callable, spec::LaunchSpec, dims::Dims, x...)
+    return parallel_reduce(spec, dims, f, x...)
 end
 
 array_size(a::AbstractArray) = size(a)
@@ -156,6 +153,7 @@ function parallel_reduce(
 end
 
 parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a; kw...)
+
 function parallel_reduce(spec::LaunchSpec, a::AbstractArray; kw...)
     parallel_reduce(spec, +, a; kw...)
 end
