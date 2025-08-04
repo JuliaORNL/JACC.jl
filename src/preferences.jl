@@ -34,6 +34,10 @@ const supported_backends = ("threads", "cuda", "amdgpu", "oneapi")
 
 function set_backend(new_backend::String)
     new_backend_lc = lowercase(new_backend)
+    if new_backend_lc == backend
+        return
+    end
+
     if !(new_backend_lc in supported_backends)
         throw(ArgumentError("Invalid backend: \"$(new_backend)\""))
     end
