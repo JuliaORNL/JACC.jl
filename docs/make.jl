@@ -18,4 +18,8 @@ makedocs(; sitename = "JACC.jl",
         ; prettyurls = true)
 )
 
-deploydocs(repo = "github.com/JuliaORNL/JACC.jl.git")
+deploydocs(repo = "github.com/JuliaORNL/JACC.jl.git", 
+    target = "build",
+    push_preview = true,
+    devbranch = "main"
+)
