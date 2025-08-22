@@ -1,5 +1,6 @@
 # JACC.jl
 
+[![docs](https://github.com/JuliaORNL/JACC.jl/actions/workflows/pages/pages-build-deployment/badge.svg)](https://juliaornl.github.io/JACC.jl)
 [![CI-CPU](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml)
 [![CI-GPU-NVIDIA](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml)
 [![CI-GPU-AMD](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml)
