@@ -14,7 +14,7 @@ Former sponsors:
 - The Exascale Computing Project -
   [PROTEAS-TUNE](https://www.ornl.gov/project/proteas-tune) 
 
-JACC won't be possible without the contributions of the [JuliaGPU](https://juliagpu.org/) community and the amazing GPU work of the backend developers.
+JACC would not be possible without the contributions of the [Julia language](https://julialang.org/) and the [JuliaGPU](https://juliagpu.org/) community and the amazing GPU work of the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl), [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), [oneAPI.jl](https://github.com/JuliaGPU/oneAPI.jl) and [Metal.jl](https://github.com/JuliaGPU/Metal.jl) backend developers.
 
 ## Citing
 Much of JACC is motivated by the Julia desire to make high-performance computing more accessible to a broader range of users. If you use JACC in your research or projects, we would appreciate it if you could cite our paper from [SC24-WAACPD](https://doi.org/10.1109/SCW63240.2024.00245), open version available [here](https://conferences.computer.org/sc-wpub/pdfs/SC-W2024-6oZmigAQfgJ1GhPL0yE3pS/555400b955/555400b955.pdf).
@@ -33,3 +33,8 @@ bib entry:
   doi={10.1109/SCW63240.2024.00245}
 }
 ```
+
+Other papers that contributed to JACC's exploratory research include:
+
+- [JACC shared at IEEE HPEC](https://doi.org/10.1109/HPEC62836.2024.10938453)
+- JACC Multi, accepted at [IEEE eScience](https://www.escience-conference.org/2025/papers)
