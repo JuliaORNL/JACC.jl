@@ -85,12 +85,12 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
     spec::LaunchSpec{Backend} = LaunchSpec{Backend}()
 end
 
-function reducer(; dims, op = +, init = default_init(op))
+@inline function reducer(; dims, op = +, init = default_init(op))
     ParallelReduce{typeof(default_backend()), typeof(init)}(;
         dims = dims, op = op, init = init)
 end
 
-function reducer(dims::Dims, op::Callable = +; init = default_init(op))
+@inline function reducer(dims::Dims, op::Callable = +; init = default_init(op))
     reducer(; dims = dims, op = op, init = init)
 end
 
@@ -110,7 +110,8 @@ end
 
 get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
 
-@inline function parallel_reduce(dims::Dims, op::Callable, f::Callable, x...; init)
+@inline function parallel_reduce(
+        dims::Dims, op::Callable, f::Callable, x...; init)
     return parallel_reduce(default_backend(), dims, op, f, x...; init = init)
 end
 
@@ -122,7 +123,8 @@ end
     return parallel_reduce(spec, dims, +, f, x...; init = default_init(+))
 end
 
-@inline function parallel_reduce(f::Callable, dims::Dims, op::Callable, x...; init)
+@inline function parallel_reduce(
+        f::Callable, dims::Dims, op::Callable, x...; init)
     return parallel_reduce(dims, op, f, x...; init = init)
 end
 
@@ -132,6 +134,11 @@ end
 
 @inline function parallel_reduce(f::Callable, spec::LaunchSpec, dims::Dims, x...)
     return parallel_reduce(spec, dims, f, x...)
+end
+
+@inline function parallel_reduce(
+        f::Callable, spec::LaunchSpec, dims::Dims, op::Callable, x...; init)
+    return parallel_reduce(spec, dims, op, f, x...; init = init)
 end
 
 array_size(a::AbstractArray) = size(a)

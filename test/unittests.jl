@@ -297,7 +297,7 @@ end
 
     function test_sync()
         ix = JACC.zeros(Int, N)
-        JACC.parallel_for(N, ix) do i, x
+        JACC.parallel_for(JACC.launch_spec(threads = N), N, ix) do i, x
             shared_mem = JACC.shared(x)
             shared_mem[i] = i
             JACC.sync_workgroup()
