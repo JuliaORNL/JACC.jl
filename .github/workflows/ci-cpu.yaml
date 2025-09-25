@@ -10,26 +10,34 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         jobname: [JACC-serial, JACC-threads]
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout Action
         uses: actions/checkout@v4
 
       - name: Instantiate
-        run: julia --project -e 'using Pkg; Pkg.instantiate();'
+        run: |
+          which julia || curl -fsSL https://install.julialang.org | sh -s -- -y
+          . /home/runner/.bash_profile
+          julia --project -e 'using Pkg; Pkg.instantiate();'
 
       - name: Test Serial
         if: contains(matrix.jobname, '-serial')
-        run: julia --project -e 'using Pkg; Pkg.test()'
+        run: |
+          . /home/runner/.bash_profile
+          julia --project -e 'using Pkg; Pkg.test()'
 
       - name: Test Threads
         if: contains(matrix.jobname, '-threads')
-        run: julia -t 4 --project -e 'using Pkg; Pkg.test()'
+        run: |
+          . /home/runner/.bash_profile
+          julia -t 4 --project -e 'using Pkg; Pkg.test()'
 
   macos:
     runs-on: macos-latest

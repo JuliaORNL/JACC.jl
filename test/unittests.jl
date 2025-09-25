@@ -118,6 +118,10 @@ end
     reducer.spec = JACC.launch_spec(; sync = true)
     reducer(a2)
     @test JACC.get_result(reducer) == 1
+    reducer(a2) do i, j, a
+        a[i, j]
+    end
+    @test JACC.get_result(reducer) == 1
 
     SIZE = 1000
     ah = randn(FloatType, SIZE)
@@ -237,6 +241,27 @@ end
     JACC.parallel_for(N, scal, x, y, alpha)
     JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
     @test Base.Array(x)≈Base.Array(x_shared) rtol=1e-8
+
+    function test_sync()
+        ix = JACC.zeros(Int, N)
+        spec = JACC.launch_spec(threads = N, sync = true)
+        JACC.parallel_for(spec, N, ix) do i, x
+            shared_mem = JACC.shared(x)
+            shared_mem[i] = i
+            JACC.sync_workgroup()
+            if i > 50
+                shared_mem[i] = shared_mem[i - 50]
+            end
+            x[i] = shared_mem[i]
+        end
+        ix_h = Base.Array(ix)
+        for i in [1, 10, 25, 50]
+            @test ix_h[i] == i
+            @test ix_h[i+50] == i
+        end
+    end
+    test_sync()
+    test_sync()
 end
 
 @testset "JACC.BLAS" begin
@@ -364,6 +389,7 @@ end
     M = 10
     N = 10
 
+    # 1D
     a = round.(rand(Float32, N) * 100)
     a_expected = a .+ 5.0
 
@@ -371,9 +397,20 @@ end
     JACC.parallel_for(N, a_device) do i, a
         @inbounds a[i] += 5.0
     end
-
     @test Base.Array(a_device)≈a_expected rtol=1e-5
 
+    a_device = JACC.array(a)
+    res = JACC.parallel_reduce(N, a_device) do i, a
+        a[i] * a[i]
+    end
+    @test res≈seq_dot(N, a, a) rtol=1e-1
+
+    res = JACC.parallel_reduce(N, min, a_device; init = Inf) do i, a
+        a[i]
+    end
+    @test res≈minimum(a)
+
+    # 2D
     A2 = JACC.ones(Float32, M, N)
     B2 = JACC.ones(Float32, M, N)
     C2 = JACC.zeros(Float32, M, N)
@@ -383,6 +420,17 @@ end
     C2_expected = Float32(2.0) .* ones(Float32, M, N)
     @test Base.Array(C2)≈C2_expected rtol=1e-5
 
+    res = JACC.parallel_reduce((M, N), A2, B2) do i, j, a, b
+        a[i, j] * b[i, j]
+    end
+    @test res≈seq_dot(M, N, Base.Array(A2), Base.Array(B2)) rtol=1e-1
+
+    res = JACC.parallel_reduce((M, N), min, A2; init = Inf) do i, j, a
+        a[i]
+    end
+    @test res≈1
+
+    # 3D
     A3 = JACC.ones(Float32, L, M, N)
     B3 = JACC.ones(Float32, L, M, N)
     C3 = JACC.zeros(Float32, L, M, N)

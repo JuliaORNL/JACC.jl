@@ -5,7 +5,7 @@ authors = [
     "williamfgc <williamfgc@yahoo.com>",
     "PhilipFackler <facklerpw@ornl.gov>"
 ]
-version = "0.4.0"
+version = "0.5.0"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
@@ -23,7 +23,7 @@ CUDAExt = ["CUDA"]
 oneAPIExt = ["oneAPI"]
 
 [compat]
-AMDGPU = "1"
+AMDGPU = "=1.3.3"
 Atomix = "1.0.1"
 CUDA = "5"
 Pkg = "1.11.0"

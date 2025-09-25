@@ -17,6 +17,10 @@ default_stream() = AMDGPU.stream()
 
 JACC.default_stream(::Type{AMDGPUBackend}) = default_stream()
 
+function JACC.synchronize(::AMDGPUBackend; stream = default_stream())
+    AMDGPU.synchronize(stream)
+end
+
 @inline function max_shmem_size()
     return HIP.properties(AMDGPU.device()).sharedMemPerBlock
 end
@@ -495,7 +499,7 @@ function reduce_kernel_amdgpu(N, op, red, ret)
 end
 
 function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
-    shared_mem = @ROCStaticLocalArray(eltype(ret), 256)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), 256, false)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     ti = workitemIdx().x
@@ -546,7 +550,7 @@ function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
 end
 
 function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
-    shared_mem = @ROCStaticLocalArray(eltype(ret), 256)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), 256)
     i = workitemIdx().x
     j = workitemIdx().y
 

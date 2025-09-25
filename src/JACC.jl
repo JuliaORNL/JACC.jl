@@ -9,7 +9,7 @@ include("preferences.jl")
 
 function get_backend end
 
-default_backend() = get_backend(_backend_dispatchable)
+@inline default_backend() = get_backend(_backend_dispatchable)
 
 include("array.jl")
 include("blas.jl")
@@ -85,12 +85,12 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
     spec::LaunchSpec{Backend} = LaunchSpec{Backend}()
 end
 
-function reducer(; dims, op, init = default_init(op))
+@inline function reducer(; dims, op = +, init = default_init(op))
     ParallelReduce{typeof(default_backend()), typeof(init)}(;
         dims = dims, op = op, init = init)
 end
 
-function reducer(dims::Dims, op::Callable; init = default_init(op))
+@inline function reducer(dims::Dims, op::Callable = +; init = default_init(op))
     reducer(; dims = dims, op = op, init = init)
 end
 
@@ -110,31 +110,35 @@ end
 
 get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
 
-function parallel_reduce(N::Integer, op::Callable, f::Callable, x...; init)
-    return parallel_reduce(default_backend(), N, op, f, x...; init = init)
+@inline function parallel_reduce(
+        dims::Dims, op::Callable, f::Callable, x...; init)
+    return parallel_reduce(default_backend(), dims, op, f, x...; init = init)
 end
 
-function parallel_reduce(
-        (M, N)::NTuple{2, Integer}, op::Callable, f::Callable, x...;
-        init)
-    return parallel_reduce(default_backend(), (M, N), op, f, x...; init = init)
+@inline function parallel_reduce(dims::Dims, f::Callable, x...)
+    return parallel_reduce(dims, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce(N::Integer, f::Callable, x...)
-    return parallel_reduce(N, +, f, x...; init = default_init(+))
+@inline function parallel_reduce(spec::LaunchSpec, dims::Dims, f::Callable, x...)
+    return parallel_reduce(spec, dims, +, f, x...; init = default_init(+))
 end
 
-function parallel_reduce(spec::LaunchSpec, N::Integer, f::Callable, x...)
-    return parallel_reduce(spec, N, +, f, x...; init = default_init(+))
+@inline function parallel_reduce(
+        f::Callable, dims::Dims, op::Callable, x...; init)
+    return parallel_reduce(dims, op, f, x...; init = init)
 end
 
-function parallel_reduce((M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return parallel_reduce((M, N), +, f, x...; init = default_init(+))
+@inline function parallel_reduce(f::Callable, dims::Dims, x...)
+    return parallel_reduce(dims, f, x...)
 end
 
-function parallel_reduce(
-        spec::LaunchSpec, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return parallel_reduce(spec, (M, N), +, f, x...; init = default_init(+))
+@inline function parallel_reduce(f::Callable, spec::LaunchSpec, dims::Dims, x...)
+    return parallel_reduce(spec, dims, f, x...)
+end
+
+@inline function parallel_reduce(
+        f::Callable, spec::LaunchSpec, dims::Dims, op::Callable, x...; init)
+    return parallel_reduce(spec, dims, op, f, x...; init = init)
 end
 
 array_size(a::AbstractArray) = size(a)
@@ -144,7 +148,7 @@ _elem_access(a::AbstractArray) = (i, j, k, a) -> a[i, j, k]
 _elem_access(a::AbstractMatrix) = (i, j, a) -> a[i, j]
 _elem_access(a::AbstractVector) = (i, a) -> a[i]
 
-function parallel_reduce(
+@inline function parallel_reduce(
         op::Callable, a::AbstractArray; init = default_init(eltype(a), op))
     return parallel_reduce(array_size(a), op, _elem_access(a), a; init = init)
 end
@@ -156,6 +160,7 @@ function parallel_reduce(
 end
 
 parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a; kw...)
+
 function parallel_reduce(spec::LaunchSpec, a::AbstractArray; kw...)
     parallel_reduce(spec, +, a; kw...)
 end
