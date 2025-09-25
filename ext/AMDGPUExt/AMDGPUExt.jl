@@ -6,7 +6,6 @@ using AMDGPU: HIP
 
 const AMDGPUBackend = ROCBackend
 
-# overloaded array functions
 include("array.jl")
 include("multi.jl")
 include("experimental/experimental.jl")
@@ -46,7 +45,7 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = cld(N, spec.threads)
     end
-    if spec.shmem_size == nothing
+    if spec.shmem_size == 0
         spec.shmem_size = max_shmem_size()
     end
     kernel(
