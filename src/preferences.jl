@@ -70,7 +70,7 @@ function _init_backend()
             @info "oneAPI backend loaded"
 
         elseif JACC.backend == "threads"
-            @info "Threads backend loaded"
+            @info "Threads backend loaded with $(Threads.nthreads()) threads"
         end
     end
 end

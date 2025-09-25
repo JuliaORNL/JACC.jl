@@ -294,6 +294,27 @@ end
     JACC.parallel_for(N, scal, x, y, alpha)
     JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
     @test Base.Array(x)≈Base.Array(x_shared) rtol=1e-8
+
+    function test_sync()
+        ix = JACC.zeros(Int, N)
+        spec = JACC.launch_spec(threads = N, sync = true)
+        JACC.parallel_for(spec, N, ix) do i, x
+            shared_mem = JACC.shared(x)
+            shared_mem[i] = i
+            JACC.sync_workgroup()
+            if i > 50
+                shared_mem[i] = shared_mem[i - 50]
+            end
+            x[i] = shared_mem[i]
+        end
+        ix_h = Base.Array(ix)
+        for i in [1, 10, 25, 50]
+            @test ix_h[i] == i
+            @test ix_h[i+50] == i
+        end
+    end
+    test_sync()
+    test_sync()
 end
 
 @testset "JACC.BLAS" begin
