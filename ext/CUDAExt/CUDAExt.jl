@@ -289,8 +289,12 @@ function JACC.parallel_reduce(
     kargs = kernel_args(N, op, ret, f, x...)
     kernel_1(kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
 
+    CUDA.synchronize()
+
     kargs = kernel_args(blocks, op, ret, rret)
     kernel_2(kargs...; threads = threads, blocks = 1, shmem = shmem_size)
+
+    CUDA.synchronize()
 
     return Base.Array(rret)[]
 end
