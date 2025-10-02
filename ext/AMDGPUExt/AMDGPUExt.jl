@@ -45,7 +45,7 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = cld(N, spec.threads)
     end
-    if spec.shmem_size == 0
+    if spec.shmem_size == nothing
         spec.shmem_size = max_shmem_size()
     end
     kernel(
@@ -218,9 +218,14 @@ function JACC.reduce_workspace(::AMDGPUBackend, init::T) where {T}
     AMDGPUReduceWorkspace{T}(
         AMDGPU.ROCArray{T}(undef, 0), AMDGPU.ROCArray([init]))
 end
+function JACC.reduce_workspace(::Type{AMDGPUBackend}, tmp::AMDGPU.ROCArray{T}, init::AMDGPU.ROCArray{T})  where {T}
+	AMDGPUReduceWorkspace{T}(tmp, init)
+end
+
 
 JACC.get_result(wk::AMDGPUReduceWorkspace) = Base.Array(wk.ret)[]
 
+@inline kernel_args(args...) = rocconvert.((args))
 function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
         N::Integer, f::Callable, x...)
     wk = reducer.workspace
@@ -241,18 +246,20 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
     spec.blocks = cld(N, spec.threads)
     spec.shmem_size = spec.threads * sizeof(init)
 
-    if length(wk.tmp) != spec.blocks
-        wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    #if length(wk.tmp) != spec.blocks
+    #    wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
+    #end
+    #fill!(wk.tmp, init)
+    #fill!(wk.ret, init)
 
+	kargs = kernel_args(N, op, wk.tmp, f, x...)
     kernel1(
-        N, op, wk.tmp, f, x...; groupsize = spec.threads,
+        kargs...; groupsize = spec.threads,
         gridsize = spec.blocks, shmem = spec.shmem_size, stream = spec.stream)
     AMDGPU.synchronize(spec.stream)
 
-    kernel2(spec.blocks, op, wk.tmp, wk.ret; groupsize = spec.threads,
+	kargs = kernel_args(spec.blocks, op, wk.tmp, wk.ret)
+    kernel2(kargs...; groupsize = spec.threads,
         gridsize = 1, shmem = spec.shmem_size, stream = spec.stream)
 
     if spec.sync
@@ -342,16 +349,17 @@ function JACC._parallel_reduce!(
     spec.shmem_size = 16 * 16 * sizeof(init)
 
     wk = reducer.workspace
-    if size(wk.tmp) != spec.blocks
-        wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    #if size(wk.tmp) != spec.blocks
+    #    wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
+    #end
+    #fill!(wk.tmp, init)
+    #fill!(wk.ret, init)
 
     @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_reduce_amdgpu_MN(
         (M, N), op, wk.tmp, f, x...)
-    AMDGPU.synchronize(spec.stream)
-
+	if spec.sync
+    	AMDGPU.synchronize(spec.stream)
+	end
     @roc groupsize=spec.threads gridsize=(1, 1) shmem=spec.shmem_size stream=spec.stream reduce_kernel_amdgpu_MN(
         spec.blocks, op, wk.tmp, wk.ret)
 
@@ -447,10 +455,10 @@ function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     end
     AMDGPU.sync_workgroup()
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
+    max_pwr = ceil(Int, log2(shmem_length))
     for p in (max_pwr:-1:1)
         tn = 2^p
-        if ti <= tn
+		if ti <= tn && (ti+tn) <= shmem_length
             shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
         end
         AMDGPU.sync_workgroup()
@@ -480,16 +488,16 @@ function reduce_kernel_amdgpu(N, op, red, ret)
     shared_mem[i] = tmp
     AMDGPU.sync_workgroup()
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
+	max_pwr = ceil(Int, log2(shmem_length)) 
     for p in (max_pwr:-1:1)
         tn = 2^p
-        if i <= tn
+		if i <= tn && i+tn < shmem_length
             shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
         end
         AMDGPU.sync_workgroup()
     end
 
-    if i == 1
+	if i == 1 && i+1 < shmem_length
         shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
         ret[1] = shared_mem[1]
     end

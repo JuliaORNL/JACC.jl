@@ -228,6 +228,10 @@ function JACC.reduce_workspace(::CUDABackend, init::T) where {T}
     CUDAReduceWorkspace{T}(CUDA.CuArray{T}(undef, 0), CUDA.CuArray([init]))
 end
 
+function JACC.reduce_workspace(::Type{CUDABackend}, tmp::CUDA.CuArray{T}, init::CUDA.CuArray{T})  where {T}
+	CUDAReduceWorkspace{T}(tmp, init)
+end
+
 JACC.get_result(wk::CUDAReduceWorkspace) = Base.Array(wk.ret)[]
 
 function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{CUDABackend},
@@ -236,10 +240,10 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{CUDABackend},
     op = reducer.op
     init = reducer.init
 
-    kargs_1 = kernel_args(N, op, wk.ret, f, x...)
+    kargs_1 = kernel_args(N, op, wk.tmp, f, x...)
     kernel_1, maxThreads_1 = kernel_maxthreads(_parallel_reduce_cuda, kargs_1)
 
-    kargs_2 = kernel_args(1, op, wk.ret, wk.ret)
+    kargs_2 = kernel_args(1, op, wk.tmp, wk.ret)
     kernel_2, maxThreads_2 = kernel_maxthreads(reduce_kernel_cuda, kargs_2)
 
     spec = reducer.spec
@@ -247,16 +251,18 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{CUDABackend},
     spec.blocks = cld(N, spec.threads)
     spec.shmem_size = spec.threads * sizeof(init)
 
-    if length(wk.tmp) != spec.blocks
-        wk.tmp = CUDA.CuArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    #if length(wk.tmp) != spec.blocks
+    #    wk.tmp = CUDA.CuArray{typeof(init)}(undef, spec.blocks)
+    #end
+    #fill!(wk.tmp, init)
+    #fill!(wk.ret, init)
 
     kargs = kernel_args(N, op, wk.tmp, f, x...)
     kernel_1(kargs...; threads = spec.threads, blocks = spec.blocks,
         shmem = spec.shmem_size, stream = spec.stream)
-    CUDA.synchronize(spec.stream)
+	if spec.sync
+    	CUDA.synchronize(spec.stream)
+	end
 
     kargs = kernel_args(spec.blocks, op, wk.tmp, wk.ret)
     kernel_2(kargs...; threads = spec.threads, blocks = 1,
@@ -347,16 +353,17 @@ function JACC._parallel_reduce!(
     spec.shmem_size = 16 * 16 * sizeof(init)
 
     wk = reducer.workspace
-    if size(wk.tmp) != spec.blocks
-        wk.tmp = CUDA.CuArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    #if size(wk.tmp) != spec.blocks
+    #    wk.tmp = CUDA.CuArray{typeof(init)}(undef, spec.blocks)
+    #end
+    #fill!(wk.tmp, init)
+    #fill!(wk.ret, init)
 
     @cuda threads=spec.threads blocks=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_reduce_cuda_MN(
         (M, N), op, wk.tmp, f, x...)
-    CUDA.synchronize(spec.stream)
-
+	if spec.sync
+    	CUDA.synchronize(spec.stream)
+	end
     @cuda threads=spec.threads blocks=(1, 1) shmem=spec.shmem_size stream=spec.stream reduce_kernel_cuda_MN(
         spec.blocks, op, wk.tmp, wk.ret)
 
@@ -450,10 +457,10 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
     end
     sync_threads()
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
+	max_pwr = ceil(Int, log2(shmem_length)) 
     for p in (max_pwr:-1:1)
         tn = 2^p
-        if (ti <= tn)
+		if (ti <= tn && (ti+tn) <= shmem_length)
             shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
         end
         sync_threads()
@@ -483,16 +490,16 @@ function reduce_kernel_cuda(N, op, red, ret)
     shared_mem[i] = tmp
     sync_threads()
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
+	max_pwr = ceil(Int, log2(shmem_length)) 
     for p in (max_pwr:-1:1)
         tn = 2^p
-        if i <= tn
+		if i <= tn && i+tn < shmem_length
             shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
         end
         sync_threads()
     end
 
-    if i == 1
+	if i == 1 && i+1 < shmem_length
         shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
         ret[1] = shared_mem[1]
     end
