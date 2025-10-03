@@ -52,7 +52,7 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = cld(N, spec.threads)
     end
-    if spec.shmem_size == 0
+    if spec.shmem_size == nothing
         spec.shmem_size = max_shmem_size()
     end
     kernel(kargs...; threads = spec.threads, blocks = spec.blocks,
@@ -165,7 +165,7 @@ function JACC.parallel_for(
         spec.blocks = (cld(m, spec.threads[1]), cld(n, spec.threads[2]))
     end
 
-    if spec.shmem_size == 0
+    if spec.shmem_size == nothing
         spec.shmem_size = max_shmem_size()
     end
 
@@ -209,7 +209,7 @@ function JACC.parallel_for(
         Nblocks = cld(N, spec.threads[3])
         spec.blocks = (Lblocks, Mblocks, Nblocks)
     end
-    if spec.shmem_size == 0
+    if spec.shmem_size == nothing
         spec.shmem_size = max_shmem_size()
     end
     @cuda threads=spec.threads blocks=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_for_cuda_LMN(
