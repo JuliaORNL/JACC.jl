@@ -11,9 +11,9 @@ if JACCBench.matches(ARGS)
     popfirst!(ARGS)
     filter = JACCBench.getconf().filter
     if isempty(filter)
-        retest(JACCBench, spin=false, stats=true)
+        retest(JACCBench; spin = false, stats = true)
     else
-        retest(JACCBench, filter, spin=false)
+        retest(JACCBench, filter; spin = false)
     end
 else
     if isempty(ARGS)

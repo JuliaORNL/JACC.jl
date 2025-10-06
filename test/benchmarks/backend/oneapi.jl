@@ -16,8 +16,8 @@ function axpy_oneapi(SIZE::Integer, alpha, x, y)
 end
 
 function axpy_oneapi_kernel((M, N)::NTuple{2, Integer}, alpha, x, y)
-    i = get_global_id(0)
-    j = get_global_id(1)
+    i = get_global_id(1)
+    j = get_global_id(2)
     i > M && return nothing
     j > N && return nothing
     axpy(i, j, alpha, x, y)
@@ -38,100 +38,100 @@ end
 
 push!(JACCBench.axpy_comps, axpy_oneapi)
 
-
 function dot_oneapi_kernel(SIZE::Integer, ret, x, y)
     shared_mem = oneLocalArray(Float32, 256)
-    i = get_global_id(0)
-    ti = get_local_id(0)
+    i = get_global_id()
+    ti = get_local_id()
     tmp::Float32 = 0.0
     shared_mem[ti] = 0.0
     if i <= SIZE
-        tmp = @inbounds x[i] * y[i]
-        shared_mem[ti] = tmp
-        barrier()
+        @inbounds tmp = x[i] * y[i]
+        @inbounds shared_mem[ti] = tmp
     end
+    barrier()
     if (ti <= 128)
-        shared_mem[ti] += shared_mem[ti + 128]
+        @inbounds shared_mem[ti] += shared_mem[ti + 128]
     end
     barrier()
     if (ti <= 64)
-        shared_mem[ti] += shared_mem[ti + 64]
+        @inbounds shared_mem[ti] += shared_mem[ti + 64]
     end
     barrier()
     if (ti <= 32)
-        shared_mem[ti] += shared_mem[ti + 32]
+        @inbounds shared_mem[ti] += shared_mem[ti + 32]
     end
     barrier()
     if (ti <= 16)
-        shared_mem[ti] += shared_mem[ti + 16]
+        @inbounds shared_mem[ti] += shared_mem[ti + 16]
     end
     barrier()
     if (ti <= 8)
-        shared_mem[ti] += shared_mem[ti + 8]
+        @inbounds shared_mem[ti] += shared_mem[ti + 8]
     end
     barrier()
     if (ti <= 4)
-        shared_mem[ti] += shared_mem[ti + 4]
+        @inbounds shared_mem[ti] += shared_mem[ti + 4]
     end
     barrier()
     if (ti <= 2)
-        shared_mem[ti] += shared_mem[ti + 2]
+        @inbounds shared_mem[ti] += shared_mem[ti + 2]
     end
     barrier()
     if (ti == 1)
-        shared_mem[ti] += shared_mem[ti + 1]
-        ret[get_group_id(0)] = shared_mem[ti]
+        @inbounds shared_mem[ti] += shared_mem[ti + 1]
+        ret[get_group_id()] = shared_mem[ti]
     end
-    barrier()
     return nothing
 end
 
 function oneapi_reduce_kernel(SIZE::Integer, red, ret)
-    shared_mem = oneLocalArray(Float32, 256)
-    i = get_global_id(0)
-    ii = i
-    tmp::Float32 = 0.0
-    if SIZE > 256
-        while ii <= SIZE
-            tmp += @inbounds red[ii]
-            ii += 256
+    @inbounds begin
+        shared_mem = oneLocalArray(Float32, 256)
+        i = get_global_id()
+        ii = i
+        tmp::Float32 = 0.0
+        if SIZE > 256
+            while ii <= SIZE
+                tmp += red[ii]
+                ii += 256
+            end
+        else
+            tmp = red[i]
         end
-    else
-        tmp = @inbounds red[i]
-    end
-    shared_mem[i] = tmp
-    barrier()
-    if (i <= 128)
-        shared_mem[i] += shared_mem[i + 128]
-    end
-    barrier()
-    if (i <= 64)
-        shared_mem[i] += shared_mem[i + 64]
-    end
-    barrier()
-    if (i <= 32)
-        shared_mem[i] += shared_mem[i + 32]
-    end
-    barrier()
-    if (i <= 16)
-        shared_mem[i] += shared_mem[i + 16]
-    end
-    barrier()
-    if (i <= 8)
-        shared_mem[i] += shared_mem[i + 8]
-    end
-    barrier()
-    if (i <= 4)
-        shared_mem[i] += shared_mem[i + 4]
-    end
-    barrier()
-    if (i <= 2)
-        shared_mem[i] += shared_mem[i + 2]
-    end
-    barrier()
-    if (i == 1)
-        shared_mem[i] += shared_mem[i + 1]
-        ret[1] = shared_mem[1]
+        shared_mem[i] = tmp
+        barrier()
+        if (i <= 128)
+            shared_mem[i] += shared_mem[i + 128]
+        end
+        barrier()
+        if (i <= 64)
+            shared_mem[i] += shared_mem[i + 64]
+        end
+        barrier()
+        if (i <= 32)
+            shared_mem[i] += shared_mem[i + 32]
+        end
+        barrier()
+        if (i <= 16)
+            shared_mem[i] += shared_mem[i + 16]
+        end
+        barrier()
+        if (i <= 8)
+            shared_mem[i] += shared_mem[i + 8]
+        end
+        barrier()
+        if (i <= 4)
+            shared_mem[i] += shared_mem[i + 4]
+        end
+        barrier()
+        if (i <= 2)
+            shared_mem[i] += shared_mem[i + 2]
+        end
+        barrier()
+        if (i == 1)
+            shared_mem[i] += shared_mem[i + 1]
+            ret[1] = shared_mem[1]
+        end
     end
     return nothing
 end
@@ -139,23 +139,24 @@ end
 function dot_oneapi(SIZE::Integer, x, y)
     numItems = 256
     items = min(SIZE, numItems)
-    groups = ceil(Int, SIZE / items)
+    groups = cld(SIZE, items)
     ret = oneAPI.zeros(Float32, groups)
     rret = oneAPI.zeros(Float32, 1)
-    oneAPI.@sync @oneapi items=items groups=groups dot_oneapi_kernel(
-        SIZE, ret, x, y)
-    oneAPI.@sync @oneapi items=items groups=1 oneapi_reduce_kernel(SIZE, ret, rret)
-    return rret
+    @oneapi items=items groups=groups dot_oneapi_kernel(SIZE, ret, x, y)
+    oneAPI.synchronize()
+    @oneapi items=items groups=1 oneapi_reduce_kernel(SIZE, ret, rret)
+    oneAPI.synchronize()
+    return Base.Array(rret)[]
 end
 
 function dot_oneapi_kernel((M, N)::NTuple{2, Integer}, ret, x, y)
     shared_mem = oneLocalArray(Float32, 16 * 16)
     i = get_global_id(0)
     j = get_global_id(1)
-    ti = get_local_id(0)
-    tj = get_local_id(1)
-    bi = get_group_id(0)
-    bj = get_group_id(1)
+    ti = get_local_id(1)
+    tj = get_local_id(2)
+    bi = get_group_id(1)
+    bj = get_group_id(2)
 
     tmp::Float32 = 0.0
     shared_mem[((ti - 1) * 16) + tj] = tmp
@@ -189,13 +190,14 @@ function dot_oneapi_kernel((M, N)::NTuple{2, Integer}, ret, x, y)
         shared_mem[((ti - 1) * 16) + tj] += shared_mem[ti * 16 + tj]
         ret[bi, bj] = shared_mem[((ti - 1) * 16) + tj]
     end
+    barrier()
     return nothing
 end
 
 function reduce_kernel((M, N)::NTuple{2, Integer}, red, ret)
     shared_mem = oneLocalArray(Float32, 16 * 16)
-    i = get_local_id(0)
-    j = get_local_id(1)
+    i = get_local_id(1)
+    j = get_local_id(2)
     ii = i
     jj = j
 
@@ -204,7 +206,7 @@ function reduce_kernel((M, N)::NTuple{2, Integer}, red, ret)
 
     if M > 16 && N > 16
         while ii <= M
-            jj = get_local_id(1)
+            jj = get_local_id(2)
             while jj <= N
                 tmp = tmp + @inbounds red[ii, jj]
                 jj += 16
@@ -283,14 +285,16 @@ function dot_oneapi((M, N)::NTuple{2, Integer}, x, y)
     maxPossibleItems = 16
     Mitems = min(M, maxPossibleItems)
     Nitems = min(N, maxPossibleItems)
-    Mgroups = ceil(Int, M / Mitems)
-    Ngroups = ceil(Int, N / Nitems)
-    ret = oneAPI.zeros(Float32, (Mgroups, Ngroups))
+    items = (Mitems, Nitems)
+    Mgroups = cld(M, Mitems)
+    Ngroups = cld(N, Nitems)
+    groups = (Mgroups, Ngroups)
+    ret = oneAPI.zeros(Float32, groups)
     rret = oneAPI.zeros(Float32, 1)
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) dot_oneapi_kernel(
-        (M, N), ret, x, y)
-    oneAPI.@sync @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel(
-        (Mgroups, Ngroups), ret, rret)
+    @oneapi items=items groups=groups dot_oneapi_kernel((M, N), ret, x, y)
+    oneAPI.synchronize()
+    @oneapi items=items groups=(1, 1) reduce_kernel(groups, ret, rret)
+    oneAPI.synchronize()
     return rret
 end
 

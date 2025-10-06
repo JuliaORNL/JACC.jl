@@ -11,7 +11,7 @@ function axpy_amdgpu(SIZE::Integer, alpha, x, y)
     maxPossibleThreads = 512
     threads = min(SIZE, maxPossibleThreads)
     blocks = ceil(Int, SIZE / threads)
-    @roc groupsize=threads gridsize=threads * blocks axpy_amdgpu_kernel(
+    @roc groupsize=threads gridsize=threads*blocks axpy_amdgpu_kernel(
         SIZE, alpha, x, y)
 end
 
@@ -150,10 +150,10 @@ function dot_amdgpu(SIZE::Integer, x, y)
     blocks = ceil(Int, SIZE / threads)
     ret = AMDGPU.zeros(Float64, blocks)
     rret = AMDGPU.zeros(Float64, 1)
-    @roc groupsize=threads gridsize=blocks shmem=512 *
-                                                              sizeof(Float64) dot_amdgpu_kernel(
+    @roc groupsize=threads gridsize=blocks shmem=512*
+    sizeof(Float64) dot_amdgpu_kernel(
         SIZE, ret, x, y)
-    @roc groupsize=threads gridsize=1 localmem=512 * sizeof(Float64) amdgpu_reduce_kernel(
+    @roc groupsize=threads gridsize=1 localmem=512*sizeof(Float64) amdgpu_reduce_kernel(
         blocks, ret, rret)
     return rret
 end
@@ -298,11 +298,11 @@ function dot_amdgpu((M, N)::NTuple{2, Integer}, x, y)
     ret = AMDGPU.zeros(Float64, (Mblocks, Nblocks))
     rret = AMDGPU.zeros(Float64, 1)
     @roc groupsize=(Mthreads, Nthreads) gridsize=(
-        Mblocks * Mthreads, Nblocks * Nthreads) localmem=16 * 16 *
-                                                         sizeof(Float64) dot_amdgpu_kernel(
+        Mblocks*Mthreads, Nblocks*Nthreads) localmem=16*16*
+                                                     sizeof(Float64) dot_amdgpu_kernel(
         (M, N), ret, x, y)
-    @roc groupsize=(Mblocks, Nblocks) gridsize=(Mblocks, Nblocks) localmem=16 *
-                                                                           16 *
+    @roc groupsize=(Mblocks, Nblocks) gridsize=(Mblocks, Nblocks) localmem=16*
+                                                                           16*
                                                                            sizeof(Float64) reduce_kernel(
         (Mblocks, Nblocks), ret, rret)
     return rret

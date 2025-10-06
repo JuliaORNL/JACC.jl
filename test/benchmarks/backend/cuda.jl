@@ -150,9 +150,9 @@ function dot_cuda(SIZE::Integer, x, y)
     blocks = ceil(Int, SIZE / threads)
     ret = CUDA.zeros(Float64, blocks)
     rret = CUDA.zeros(Float64, 1)
-    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512 * sizeof(Float64) dot_cuda_kernel(
+    CUDA.@sync @cuda threads=threads blocks=blocks shmem=512*sizeof(Float64) dot_cuda_kernel(
         SIZE, ret, x, y)
-    CUDA.@sync @cuda threads=threads blocks=1 shmem=512 * sizeof(Float64) cuda_reduce_kernel(
+    CUDA.@sync @cuda threads=threads blocks=1 shmem=512*sizeof(Float64) cuda_reduce_kernel(
         blocks, ret, rret)
     return rret
 end
@@ -299,11 +299,11 @@ function dot_cuda((M, N)::NTuple{2, Integer}, x, y)
     Nblocks = ceil(Int, N / Nthreads)
     ret = CUDA.zeros(Float64, (Mblocks, Nblocks))
     rret = CUDA.zeros(Float64, 1)
-    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16 *
-                                                                                  16 *
+    CUDA.@sync @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=16*
+                                                                                  16*
                                                                                   sizeof(Float64) dot_cuda_kernel(
         (M, N), ret, x, y)
-    CUDA.@sync @cuda threads=(Mblocks, Nblocks) blocks=(1, 1) shmem=16 * 16 *
+    CUDA.@sync @cuda threads=(Mblocks, Nblocks) blocks=(1, 1) shmem=16*16*
                                                                     sizeof(Float64) cuda_reduce_kernel(
         (Mblocks, Nblocks), ret, rret)
     return rret
