@@ -5,13 +5,13 @@ on:
     types: [created]
 
 jobs:
-  wfg-RTXA4000:
+  RTXA4000:
     if: |
       github.repository_owner == 'JuliaORNL' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
-    runs-on: [self-hosted, Linux, X64, ci-wfg-ornl-rtxA4000-1]
+    runs-on: [self-hosted, Linux, X64, PC0130967]
 
     env:
       GH_JOBNAME: ${{matrix.jobname}}
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        jobname: [CUDA12_3-JULIA1_11_2-CUDAJL5]
+        jobname: [NVHPC25_9-CUDA13-JULIA1_11_7-CUDAJL5_9]
 
     steps:
       # Only trigger CI for certain "actors" (those commenting the PR, not the PR originator)
