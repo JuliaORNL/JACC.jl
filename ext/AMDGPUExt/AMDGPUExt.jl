@@ -209,14 +209,33 @@ function JACC.parallel_for(
     end
 end
 
-mutable struct AMDGPUReduceWorkspace{T} <: JACC.ReduceWorkspace
+mutable struct AMDGPUReduceWorkspace{T, TP <: JACC.WkProp} <:
+               JACC.ReduceWorkspace
     tmp::AMDGPU.ROCArray{T}
     ret::AMDGPU.ROCArray{T}
 end
 
 function JACC.reduce_workspace(::AMDGPUBackend, init::T) where {T}
-    AMDGPUReduceWorkspace{T}(
+    AMDGPUReduceWorkspace{T, JACC.Managed}(
         AMDGPU.ROCArray{T}(undef, 0), AMDGPU.ROCArray([init]))
+end
+
+function JACC.reduce_workspace(::AMDGPUBackend, tmp::AMDGPU.ROCArray{T},
+        init::AMDGPU.ROCArray{T}) where {T}
+    AMDGPUReduceWorkspace{T, JACC.Unmanaged}(tmp, init)
+end
+
+@inline function _init!(wk::AMDGPUReduceWorkspace{T, JACC.Managed}, spec, init) where {T}
+    if length(wk.tmp) <= spec.blocks
+        wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
+    end
+    fill!(wk.tmp, init)
+    fill!(wk.ret, init)
+    return nothing
+end
+
+@inline function _init!(wk::AMDGPUReduceWorkspace{T, JACC.Unmanaged}, spec, init) where {T}
+    nothing
 end
 
 JACC.get_result(wk::AMDGPUReduceWorkspace) = Base.Array(wk.ret)[]
@@ -241,16 +260,11 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
     spec.blocks = cld(N, spec.threads)
     spec.shmem_size = spec.threads * sizeof(init)
 
-    if length(wk.tmp) != spec.blocks
-        wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    _init!(wk, init)
 
     kernel1(
         N, op, wk.tmp, f, x...; groupsize = spec.threads,
         gridsize = spec.blocks, shmem = spec.shmem_size, stream = spec.stream)
-    AMDGPU.synchronize(spec.stream)
 
     kernel2(spec.blocks, op, wk.tmp, wk.ret; groupsize = spec.threads,
         gridsize = 1, shmem = spec.shmem_size, stream = spec.stream)
@@ -285,7 +299,7 @@ function JACC.parallel_reduce(
     kernel1(
         N, op, ret, f, x...; groupsize = threads,
         gridsize = blocks, shmem = shmem_size)
-    AMDGPU.synchronize()
+
     kernel2(blocks, op, ret, rret; groupsize = threads,
         gridsize = 1, shmem = shmem_size)
     AMDGPU.synchronize()
@@ -315,7 +329,6 @@ function JACC.parallel_reduce(
     kernel1(
         N, op, ret, f, x...; groupsize = spec.threads,
         gridsize = spec.blocks, shmem = spec.shmem_size, stream = spec.stream)
-    AMDGPU.synchronize(spec.stream)
 
     kernel2(spec.blocks, op, ret, rret; groupsize = spec.threads,
         gridsize = 1, shmem = spec.shmem_size, stream = spec.stream)
@@ -342,15 +355,10 @@ function JACC._parallel_reduce!(
     spec.shmem_size = 16 * 16 * sizeof(init)
 
     wk = reducer.workspace
-    if size(wk.tmp) != spec.blocks
-        wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
-    end
-    fill!(wk.tmp, init)
-    fill!(wk.ret, init)
+    _init!(wk, spec, init)
 
     @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_reduce_amdgpu_MN(
         (M, N), op, wk.tmp, f, x...)
-    AMDGPU.synchronize(spec.stream)
 
     @roc groupsize=spec.threads gridsize=(1, 1) shmem=spec.shmem_size stream=spec.stream reduce_kernel_amdgpu_MN(
         spec.blocks, op, wk.tmp, wk.ret)
@@ -374,7 +382,7 @@ function JACC.parallel_reduce(
     rret = AMDGPU.ROCArray([init])
     @roc groupsize=(Mthreads, Nthreads) gridsize=(Mblocks, Nblocks) shmem=shmem_size _parallel_reduce_amdgpu_MN(
         (M, N), op, ret, f, x...)
-    AMDGPU.synchronize()
+
     @roc groupsize=(Mthreads, Nthreads) gridsize=(1, 1) shmem=shmem_size reduce_kernel_amdgpu_MN(
         (Mblocks, Nblocks), op, ret, rret)
     AMDGPU.synchronize()
@@ -396,7 +404,6 @@ function JACC.parallel_reduce(
     rret = AMDGPU.ROCArray([init])
     @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_reduce_amdgpu_MN(
         (M, N), op, ret, f, x...)
-    AMDGPU.synchronize(spec.stream)
 
     @roc groupsize=spec.threads gridsize=(1, 1) shmem=spec.shmem_size stream=spec.stream reduce_kernel_amdgpu_MN(
         spec.blocks, op, ret, rret)

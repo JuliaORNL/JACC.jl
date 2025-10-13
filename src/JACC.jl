@@ -73,6 +73,10 @@ default_init(op::Callable) = default_init(default_float(), op)
 
 abstract type ReduceWorkspace end
 
+abstract type WkProp end
+struct Managed <: WkProp end
+struct Unmanaged <: WkProp end
+
 reduce_workspace() = reduce_workspace(default_backend(), default_float()())
 
 reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
