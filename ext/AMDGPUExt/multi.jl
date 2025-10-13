@@ -34,6 +34,8 @@ struct MultiArray{T,N,NG}
     orig_size
 end
 
+JACC.to_host(x::MultiArray) = convert(Base.Array, x)
+
 @inline ghost_dims(x::MultiArray{T,N,NG}) where {T,N,NG} = NG
 @inline JACC.Multi.part_length(::AMDGPUBackend, x::MultiArray) = size(x.a2[1])[end]
 

@@ -47,7 +47,9 @@ sync_workgroup() = sync_workgroup(default_backend())
 
 array_type() = array_type(default_backend())
 
-array(x::Base.Array) = array(default_backend(), x)
+array(x::AbstractArray) = array(default_backend(), x)
+
+to_host(x::AbstractArray) = convert(Base.Array, x)
 
 default_float() = default_float(default_backend())
 

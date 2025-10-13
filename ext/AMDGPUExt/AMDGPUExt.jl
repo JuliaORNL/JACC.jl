@@ -689,6 +689,6 @@ JACC.sync_workgroup(::AMDGPUBackend) = AMDGPU.sync_workgroup()
 
 JACC.array_type(::AMDGPUBackend) = AMDGPU.ROCArray
 
-JACC.array(::AMDGPUBackend, x::Base.Array) = AMDGPU.ROCArray(x)
+JACC.array(::AMDGPUBackend, x::AbstractArray) = AMDGPU.ROCArray(x)
 
 end # module AMDGPUExt
