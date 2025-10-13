@@ -45,7 +45,7 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = cld(N, spec.threads)
     end
-    if spec.shmem_size == 0
+    if spec.shmem_size < 0
         spec.shmem_size = max_shmem_size()
     end
     kernel(
@@ -156,7 +156,7 @@ function JACC.parallel_for(
         spec.blocks = (cld(m, spec.threads[1]), cld(n, spec.threads[2]))
     end
 
-    if spec.shmem_size == 0
+    if spec.shmem_size < 0
         spec.shmem_size = max_shmem_size()
     end
 
@@ -199,7 +199,7 @@ function JACC.parallel_for(
         Nblocks = cld(N, spec.threads[3])
         spec.blocks = (Lblocks, Mblocks, Nblocks)
     end
-    if spec.shmem_size == 0
+    if spec.shmem_size < 0
         spec.shmem_size = max_shmem_size()
     end
     @roc groupsize=spec.threads gridsize=spec.blocks shmem=spec.shmem_size stream=spec.stream _parallel_for_amdgpu_LMN(
