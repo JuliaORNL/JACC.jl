@@ -228,7 +228,7 @@ function JACC.reduce_workspace(::AMDGPUBackend, tmp::AMDGPU.ROCArray{T},
 end
 
 @inline function _init!(wk::AMDGPUReduceWorkspace{T, JACC.Managed}, spec, init) where {T}
-    if length(wk.tmp) <= spec.blocks
+    if length(wk.tmp) != spec.blocks
         wk.tmp = AMDGPU.ROCArray{typeof(init)}(undef, spec.blocks)
     end
     fill!(wk.tmp, init)
@@ -262,7 +262,7 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
     spec.blocks = cld(N, spec.threads)
     spec.shmem_size = spec.threads * sizeof(init)
 
-    _init!(wk, init)
+    _init!(wk, spec, init)
 
     kargs1 = kernel_args(N, op, wk.tmp, f, x...)
     kernel1(kargs1...; groupsize = spec.threads, gridsize = spec.blocks,
@@ -304,7 +304,7 @@ function JACC.parallel_reduce(
         shmem = shmem_size)
 
     kargs2 = kernel_args(blocks, op, ret, rret)
-    kernel2(kargs2; groupsize = threads, gridsize = 1, shmem = shmem_size)
+    kernel2(kargs2...; groupsize = threads, gridsize = 1, shmem = shmem_size)
     AMDGPU.synchronize()
 
     return Base.Array(rret)[]
