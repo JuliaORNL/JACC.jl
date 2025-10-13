@@ -17,6 +17,8 @@ function JACC.synchronize(::oneAPIBackend; stream = default_stream())
     oneAPI.synchronize(stream)
 end
 
+@inline kernel_args(args...) = kernel_convert.((args))
+
 function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Callable, x...)
     kernel = @oneapi launch=false _parallel_for_oneapi(N, f, x...)
     config_items = oneAPI.launch_configuration(kernel)
@@ -36,7 +38,8 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = cld(N, spec.threads)
     end
-    kernel(N, f, x...; items = spec.threads, groups = spec.blocks, queue = spec.stream)
+    kernel(N, f, x...; items = spec.threads,
+        groups = spec.blocks, queue = spec.stream)
     if spec.sync
         oneAPI.synchronize(spec.stream)
     end
@@ -131,7 +134,8 @@ function JACC.parallel_for(
     if spec.blocks == 0
         spec.blocks = (cld(M, spec.threads[1]), cld(N, spec.threads[2]))
     end
-    kernel(indexer, (M, N), f, x...; items = spec.threads, groups = spec.blocks,
+    kernel(
+        indexer, (M, N), f, x...; items = spec.threads, groups = spec.blocks,
         queue = spec.stream)
     if spec.sync
         oneAPI.synchronize(spec.stream)
@@ -268,12 +272,12 @@ end
 
 function JACC.parallel_reduce(
         spec::LaunchSpec{oneAPIBackend}, N::Integer, op, f::Callable, x...; init)
-    reducer = JACC.ParallelReduce{oneAPIBackend, typeof(init)}(
+    reducer = JACC.ParallelReduce{oneAPIBackend, typeof(init)}(;
         dims = N,
         op = op,
         init = init,
         workspace = JACC.reduce_workspace(oneAPIBackend(), init),
-        spec = spec,
+        spec = spec
     )
     JACC._parallel_reduce!(reducer, N, f, x...)
     return reducer.workspace.ret
