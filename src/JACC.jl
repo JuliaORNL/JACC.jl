@@ -33,7 +33,7 @@ const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
     stream = default_stream(Backend)
     threads = 0
     blocks = 0
-    shmem_size::Int = 0
+    shmem_size::Int = -1
     sync::Bool = false
 end
 
