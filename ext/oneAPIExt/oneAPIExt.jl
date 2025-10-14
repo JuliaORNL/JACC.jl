@@ -632,7 +632,7 @@ JACC.sync_workgroup(::oneAPIBackend) = oneAPI.barrier()
 
 JACC.array_type(::oneAPIBackend) = oneAPI.oneArray
 
-JACC.array(::oneAPIBackend, x::Base.Array) = oneAPI.oneArray(x)
+JACC.array(::oneAPIBackend, x::Array) = oneAPI.oneArray(x)
 
 DefaultFloat = Union{Type, Nothing}
 

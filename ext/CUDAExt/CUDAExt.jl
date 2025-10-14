@@ -702,6 +702,6 @@ JACC.sync_workgroup(::CUDABackend) = CUDA.sync_threads()
 
 JACC.array_type(::CUDABackend) = CUDA.CuArray
 
-JACC.array(::CUDABackend, x::Base.Array) = CUDA.CuArray(x)
+JACC.array(::CUDABackend, x::AbstractArray) = CUDA.CuArray(x)
 
 end # module CUDAExt

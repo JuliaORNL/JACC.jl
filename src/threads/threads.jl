@@ -243,7 +243,7 @@ JACC.sync_workgroup(::ThreadsBackend) = wait(_BARRIER[])
 
 JACC.array_type(::ThreadsBackend) = Base.Array
 
-JACC.array(::ThreadsBackend, x::Base.Array) = x
+JACC.array(::ThreadsBackend, x::AbstractArray) = x
 
 JACC.shared(::ThreadsBackend, x::AbstractArray) = x
 
