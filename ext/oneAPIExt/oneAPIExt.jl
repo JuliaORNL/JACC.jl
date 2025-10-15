@@ -1,11 +1,9 @@
 module oneAPIExt
 
-import Base: Callable
 using JACC, oneAPI, oneAPI.oneL0
 
 # overloaded array functions
 include("array.jl")
-include("multi.jl")
 include("experimental/experimental.jl")
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
@@ -20,7 +18,7 @@ end
 
 @inline kernel_args(args...) = kernel_convert.((args))
 
-function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Callable, x...)
+function JACC.parallel_for(f, ::oneAPIBackend, N::Integer, x...)
     kernel = @oneapi launch=false _parallel_for_oneapi(N, f, x...)
     config_items = oneAPI.launch_configuration(kernel)
     items = min(N, config_items)
@@ -30,7 +28,7 @@ function JACC.parallel_for(::oneAPIBackend, N::Integer, f::Callable, x...)
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, N::Integer, f::Callable, x...)
+        f, spec::LaunchSpec{oneAPIBackend}, N::Integer, x...)
     kernel = @oneapi launch=false _parallel_for_oneapi(N, f, x...)
     if spec.threads == 0
         maxItems = oneAPI.launch_configuration(kernel)
@@ -59,7 +57,7 @@ function blockIndexerSwapped()
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        f, ::oneAPIBackend, (M, N)::NTuple{2, Integer}, x...)
     dev = oneAPI.device()
     props = oneAPI.compute_properties(dev)
     maxBlocks = (x = props.maxGroupCountX, y = props.maxGroupCountY)
@@ -97,7 +95,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        f, spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, x...)
     dev = oneAPI.device()
     props = oneAPI.compute_properties(dev)
     maxBlocks = (x = props.maxGroupCountX, y = props.maxGroupCountY)
@@ -144,7 +142,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
+        f, ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, x...)
     maxItems = 16
     Litems = min(L, maxItems)
     Mitems = min(M, maxItems)
@@ -158,7 +156,7 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
+        f, spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, x...)
     if spec.threads == 0
         maxItems = 16
         Litems = min(L, maxItems)
@@ -196,23 +194,23 @@ function JACC.reduce_workspace(::oneAPIBackend, tmp::oneAPI.oneArray{T},
     oneAPIReduceWorkspace{T, JACC.Unmanaged}(tmp, init)
 end
 
-@inline function _init!(wk::oneAPIReduceWorkspace{T, JACC.Managed}, spec, init) where {T}
-    if length(wk.tmp) != spec.blocks
-        wk.tmp = oneAPI.oneArray{typeof(init)}(undef, spec.blocks)
+@inline function _init!(wk::oneAPIReduceWorkspace{T, JACC.Managed}, blocks, init) where {T}
+    if length(wk.tmp) != prod(blocks)
+        wk.tmp = oneAPI.oneArray{typeof(init)}(undef, blocks)
     end
     fill!(wk.tmp, init)
     fill!(wk.ret, init)
     return nothing
 end
 
-@inline function _init!(wk::oneAPIReduceWorkspace{T, JACC.Unmanaged}, spec, init) where {T}
+@inline function _init!(wk::oneAPIReduceWorkspace{T, JACC.Unmanaged}, blocks, init) where {T}
     nothing
 end
 
 JACC.get_result(wk::oneAPIReduceWorkspace) = Base.Array(wk.ret)[]
 
 function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
-        N::Integer, f::Callable, x...)
+        N::Integer, f, x...)
     wk = reducer.workspace
     op = reducer.op
     init = reducer.init
@@ -225,28 +223,27 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
         Val(256), 1, op, wk.ret, wk.ret)
     threads2 = oneAPI.launch_configuration(kernel2)
 
-    spec = reducer.spec
-    spec.threads = min(threads1, threads2, 256)
-    spec.blocks = cld(N, spec.threads)
-    spec.shmem_size = spec.threads * sizeof(init)
+    threads = min(threads1, threads2, 256)
+    blocks = cld(N, threads)
+    shmem_size = threads * sizeof(init)
 
-    _init!(wk, spec, init)
+    _init!(wk, blocks, init)
 
-    kernel1(Val(spec.threads), N, op, wk.tmp, f, x...; items = spec.threads,
-        groups = spec.blocks, queue = spec.stream)
+    kernel1(Val(threads), N, op, wk.tmp, f, x...; items = threads,
+        groups = blocks, queue = reducer.stream)
 
-    kernel2(Val(spec.threads), spec.blocks, op, wk.tmp, wk.ret;
-        items = spec.threads, groups = 1, queue = spec.stream)
+    kernel2(Val(threads), blocks, op, wk.tmp, wk.ret; items = threads,
+        groups = 1, queue = reducer.stream)
 
-    if spec.sync
-        oneAPI.synchronize(spec.stream)
+    if reducer.sync
+        oneAPI.synchronize(reducer.stream)
     end
 
     return nothing
 end
 
-function JACC.parallel_reduce(
-        ::oneAPIBackend, N::Integer, op, f::Callable, x...; init)
+function JACC.parallel_reduce(f, ::oneAPIBackend, N::Integer, x...; op, init,
+        stream = default_stream())
     ret_inst = oneAPI.oneArray{typeof(init)}(undef, 0)
     kernel1 = @oneapi launch=false _parallel_reduce_oneapi(
         Val(256), N, op, ret_inst, f, x...)
@@ -262,58 +259,46 @@ function JACC.parallel_reduce(
 
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
 
-    @oneapi items=items groups=groups _parallel_reduce_oneapi(
+    @oneapi items=items groups=groups queue=stream _parallel_reduce_oneapi(
         Val(items), N, op, ret, f, x...)
-    @oneapi items=items groups=1 reduce_kernel_oneapi(
+    oneAPI.synchronize(stream)
+
+    @oneapi items=items groups=1 queue=stream reduce_kernel_oneapi(
         Val(items), groups, op, ret, rret)
-    oneAPI.synchronize()
+    oneAPI.synchronize(stream)
 
     return Base.Array(rret)[]
 end
 
-function JACC.parallel_reduce(
-        spec::LaunchSpec{oneAPIBackend}, N::Integer, op, f::Callable, x...; init)
-    reducer = JACC.ParallelReduce{oneAPIBackend, typeof(init)}(;
-        dims = N,
-        op = op,
-        init = init,
-        workspace = JACC.reduce_workspace(oneAPIBackend(), init),
-        spec = spec
-    )
-    JACC._parallel_reduce!(reducer, N, f, x...)
-    return reducer.workspace.ret
-end
-
 function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
-        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        (M, N)::NTuple{2, Integer}, f, x...)
     init = reducer.init
-    spec = reducer.spec
     numItems = 16
     Mitems = numItems
     Nitems = numItems
-    spec.threads = (Mitems, Nitems)
-    Mgroups = cld(M, spec.threads[1])
-    Ngroups = cld(N, spec.threads[2])
-    spec.blocks = (Mgroups, Ngroups)
+    threads = (Mitems, Nitems)
+    Mgroups = cld(M, threads[1])
+    Ngroups = cld(N, threads[2])
+    blocks = (Mgroups, Ngroups)
 
     wk = reducer.workspace
-    _init!(wk, spec, init)
+    _init!(wk, blocks, init)
 
-    @oneapi items=spec.threads groups=spec.blocks queue=spec.stream _parallel_reduce_oneapi_MN(
+    @oneapi items=threads groups=blocks queue=reducer.stream _parallel_reduce_oneapi_MN(
         (M, N), reducer.op, wk.tmp, f, x...)
 
-    @oneapi items=spec.threads groups=(1, 1) queue=spec.stream reduce_kernel_oneapi_MN(
-        spec.blocks, reducer.op, wk.tmp, wk.ret)
+    @oneapi items=threads groups=(1, 1) queue=reducer.stream reduce_kernel_oneapi_MN(
+        blocks, reducer.op, wk.tmp, wk.ret)
 
-    if spec.sync
-        oneAPI.synchronize(spec.stream)
+    if reducer.sync
+        oneAPI.synchronize(reducer.stream)
     end
 
     return nothing
 end
 
-function JACC.parallel_reduce(
-        ::oneAPIBackend, (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
+function JACC.parallel_reduce(f, ::oneAPIBackend, (M, N)::NTuple{2, Integer},
+        x...; op, init, stream = default_stream())
     numItems = 16
     Mitems = numItems
     Nitems = numItems
@@ -321,35 +306,20 @@ function JACC.parallel_reduce(
     Ngroups = cld(N, Nitems)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
     rret = oneAPI.oneArray([init])
-    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) _parallel_reduce_oneapi_MN(
+    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) queue=stream _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
-    @oneapi items=(Mitems, Nitems) groups=(1, 1) reduce_kernel_oneapi_MN(
+    @oneapi items=(Mitems, Nitems) groups=(1, 1) queue=stream reduce_kernel_oneapi_MN(
         (Mgroups, Ngroups), op, ret, rret)
-    oneAPI.synchronize()
+    oneAPI.synchronize(stream)
     return Base.Array(rret)[]
 end
 
-function JACC.parallel_reduce(
-        spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
-    numItems = 16
-    Mitems = numItems
-    Nitems = numItems
-    spec.threads = (Mitems, Nitems)
-    Mgroups = cld(M, spec.threads[1])
-    Ngroups = cld(N, spec.threads[2])
-    spec.blocks = (Mgroups, Ngroups)
-    ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
-    rret = oneAPI.oneArray([init])
-    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) queue=spec.stream _parallel_reduce_oneapi_MN(
-        (M, N), op, ret, f, x...)
-
-    @oneapi items=(Mitems, Nitems) groups=(1, 1) queue=spec.stream reduce_kernel_oneapi_MN(
-        (spec.blocks[1], spec.blocks[2]), op, ret, rret)
-
-    if spec.sync
-        oneAPI.synchronize(spec.stream)
-    end
-    return rret
+@inline function JACC.parallel_reduce(f, ::oneAPIBackend,
+        dims::NTuple{N, Integer}, x...; op, init, kw...) where {N}
+    ids = CartesianIndices(dims)
+    return JACC.parallel_reduce(
+        JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
+        x...; op = op, init = init, kw...)
 end
 
 function _parallel_for_oneapi(N, f, x...)
@@ -453,8 +423,8 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
     shared_mem[sid] = ret[bi, bj]
 
     if (i <= M && j <= N)
-        tmp = @inbounds f(i, j, x...)
-        shared_mem[sid] = tmp
+        tmp = f(i, j, x...)
+        @inbounds shared_mem[sid] = tmp
     end
     barrier()
     if (ti <= 8 && tj <= 8)
@@ -656,5 +626,7 @@ function JACC.default_float(::oneAPIBackend)
     end
     return DefaultFloat
 end
+
+include("multi.jl")
 
 end # module oneAPIExt
