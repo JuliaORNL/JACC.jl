@@ -10,6 +10,9 @@ get_backend(backend::Symbol) = get_backend(Val(backend))
 
 @inline default_backend() = get_backend(_backend_dispatchable)
 
+const IDims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
+const AllDims = Union{Integer, NTuple{N, Integer}} where {N}
+
 include("array.jl")
 include("blas.jl")
 include("multi.jl")
@@ -25,9 +28,6 @@ export LaunchSpec
 export synchronize
 
 function default_stream end
-
-const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
-const AllDims = Union{Integer, NTuple{N, Integer}} where {N}
 
 @kwdef mutable struct LaunchSpec{Backend}
     stream = default_stream(Backend)
@@ -68,7 +68,7 @@ end
     parallel_for(_parallel_for_kernel_1d_nd, prod(dims), ids, f, x...)
 end
 
-@inline function parallel_for(f, dims::Dims, x...)
+@inline function parallel_for(f, dims::IDims, x...)
     parallel_for(f, default_backend(), dims, x...)
 end
 
@@ -76,7 +76,7 @@ end
     parallel_for(f, spec, dims, x...)
 end
 
-@inline function parallel_for(spec::LaunchSpec, dims::Dims, f, x...)
+@inline function parallel_for(spec::LaunchSpec, dims::IDims, f, x...)
     parallel_for(f, spec, dims, x...)
 end
 

@@ -4,6 +4,7 @@ using JACC, oneAPI, oneAPI.oneL0
 
 # overloaded array functions
 include("array.jl")
+include("async.jl")
 include("experimental/experimental.jl")
 
 JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()

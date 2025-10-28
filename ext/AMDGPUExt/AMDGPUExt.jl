@@ -7,6 +7,7 @@ const AMDGPUBackend = ROCBackend
 
 include("array.jl")
 include("multi.jl")
+include("async.jl")
 include("experimental/experimental.jl")
 
 JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
