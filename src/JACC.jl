@@ -34,7 +34,7 @@ const Dims = Union{Integer, NTuple{2, Integer}, NTuple{3, Integer}}
     threads = 0
     blocks = 0
     shmem_size::Int = -1
-    sync::Bool = false
+    sync::Bool = true
 end
 
 launch_spec(; kw...) = LaunchSpec{typeof(default_backend())}(; kw...)

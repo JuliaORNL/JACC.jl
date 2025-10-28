@@ -367,7 +367,7 @@ end
 
 function JACC.Multi.parallel_for(::AMDGPUBackend, N::Integer, f::Callable, x...)
     AMDGPU.device_id!(1)
-    ndev = length(AMDGPU.devices())
+    ndev = ndevices()
     N_multi = cld(N, ndev)
     numThreads = 256
     threads = min(N_multi, numThreads)
@@ -390,7 +390,7 @@ end
 
 function JACC.Multi.parallel_for(
         ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    ndev = length(AMDGPU.devices())
+    ndev = ndevices()
     N_multi = ceil(Int, N / ndev)
     numThreads = 16
     Mthreads = min(M, numThreads)
