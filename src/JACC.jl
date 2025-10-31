@@ -55,7 +55,7 @@ default_float() = default_float(default_backend())
 
 synchronize(; kw...) = synchronize(default_backend(); kw...)
 
-function parallel_for(dims::Dims, f::Callable, x...)
+@inline function parallel_for(dims::Dims, f::Callable, x...)
     return parallel_for(default_backend(), dims, f, x...)
 end
 
