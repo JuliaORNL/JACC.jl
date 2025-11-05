@@ -80,6 +80,10 @@ end
     parallel_for(f, spec, dims, x...)
 end
 
+@inline function parallel_for(; dims::AllDims, f, args::Tuple, kw...)
+    parallel_for(f, launch_spec(; kw...), dims, args...)
+end
+
 default_init(::Type{T}, ::typeof(+)) where {T} = zero(T)
 default_init(::Type{T}, ::typeof(*)) where {T} = one(T)
 default_init(::Type{T}, ::typeof(max)) where {T} = typemin(T)
@@ -99,16 +103,16 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
 @kwdef mutable struct ParallelReduce{Backend, T}
     dims::AllDims = 0
     op = () -> nothing
-    init::T = default_init(op)
+    init::T = default_init(T, op)
     stream = default_stream(Backend)
     sync::Bool = true
     workspace::ReduceWorkspace = reduce_workspace(Backend(), init)
 end
 
-@inline function reducer(; type::Type{T}, dims, op = +,
-        init = default_init(type, op)) where {T}
-    ParallelReduce{typeof(default_backend()), typeof(init)}(;
-        dims = dims, op = op, init = init)
+@inline function reducer(; type = nothing, dims, op = +, init = nothing)
+    _init = _resolve_init_type(op, type, init)
+    ParallelReduce{typeof(default_backend()), typeof(_init)}(;
+        dims = dims, op = op, init = _init)
 end
 
 @inline function reducer(::Type{T}, dims::AllDims, op = +;
@@ -137,40 +141,53 @@ end
     reducer(_elem_access(a), a)
 end
 
-function set_init!(reducer::ParallelReduce, init)
-    reducer.init = init
+function set_init!(reducer::ParallelReduce{B, T}, init) where {B, T}
+    reducer.init = convert(T, init)
 end
 
 get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
 
-@inline function parallel_reduce(
-        f, dims::AllDims, x...; op = +, init = default_init(op), kw...)
+@inline _resolve_init_type(op, type, init) = convert(type, init)
+@inline _resolve_init_type(op, type, init::Nothing) = default_init(type, op)
+@inline _resolve_init_type(op, type::Nothing, init) = init
+@inline _resolve_init_type(op, type::Nothing, init::Nothing) = default_init(op)
+
+@inline function parallel_reduce(f, dims::AllDims, x...;
+        type = nothing, op = +, init = nothing)
+    _init = _resolve_init_type(op, type, init)
     return parallel_reduce(
-        f, default_backend(), dims, x...; op = op, init = init, kw...)
+        f, default_backend(), dims, x...; op = op, init = _init)
 end
 
-@inline function parallel_reduce(
-        dims::AllDims, f, x...; op = +, init = default_init(op), kw...)
-    return parallel_reduce(f, dims, x...; op = op, init = init, kw...)
+@inline function parallel_reduce(dims::AllDims, f, x...; kw...)
+    return parallel_reduce(f, dims, x...; kw...)
 end
 
-@inline function JACC.parallel_reduce(
-        f, spec::LaunchSpec{TBackend}, dims::AllDims, x...; op, init) where {TBackend}
-    reducer = ParallelReduce{TBackend, typeof(init)}(;
+@inline function JACC.parallel_reduce(f, spec::LaunchSpec{TBackend},
+        dims::AllDims, x...; type = nothing, op = +,
+        init = nothing) where {TBackend}
+    _init = _resolve_init_type(op, type, init)
+    reducer = ParallelReduce{TBackend, typeof(_init)}(;
         dims = dims,
         op = op,
-        init = init,
+        init = _init,
         stream = spec.stream,
         sync = spec.sync,
-        workspace = JACC.reduce_workspace(TBackend(), init),
+        workspace = JACC.reduce_workspace(TBackend(), _init)
     )
     reducer(f, x...)
     return reducer.workspace.ret
 end
 
-@inline function parallel_reduce(spec::LaunchSpec, dims::AllDims, f, x...;
-        op = +, init = default_init(op))
-    return parallel_reduce(f, spec, dims, x...; op = op, init = init)
+@inline function parallel_reduce(
+        spec::LaunchSpec, dims::AllDims, f, x...; kw...)
+    return parallel_reduce(f, spec, dims, x...; kw...)
+end
+
+@inline function parallel_reduce(; dims::AllDims, f, args::Tuple,
+        type = nothing, op = +, init = nothing, kw...)
+    return parallel_reduce(f, launch_spec(; kw...), dims, args...; type = type,
+        op = op, init = init)
 end
 
 array_size(a::AbstractArray) = size(a)
@@ -182,14 +199,14 @@ _elem_access(a::AbstractMatrix) = (i, j, a) -> a[i, j]
 _elem_access(a::AbstractVector) = (i, a) -> a[i]
 
 @inline function parallel_reduce(
-        op, a::AbstractArray; init = default_init(eltype(a), op), kw...)
+        op, a::AbstractArray; init = default_init(eltype(a), op))
     return parallel_reduce(
-        _elem_access(a), array_size(a), a; op = op, init = init, kw...)
+        _elem_access(a), array_size(a), a; op = op, init = init)
 end
 
-parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a; kw...)
+@inline parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a)
 
-@inline function parallel_reduce(spec::LaunchSpec, op, a::AbstractArray; 
+@inline function parallel_reduce(spec::LaunchSpec, op, a::AbstractArray;
         init = default_init(eltype(a), op))
     return parallel_reduce(
         _elem_access(a), spec, array_size(a), a; op = op, init = init)

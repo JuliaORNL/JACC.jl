@@ -242,8 +242,7 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
     return nothing
 end
 
-function JACC.parallel_reduce(f, ::oneAPIBackend, N::Integer, x...; op, init,
-        stream = default_stream())
+function JACC.parallel_reduce(f, ::oneAPIBackend, N::Integer, x...; op, init)
     ret_inst = oneAPI.oneArray{typeof(init)}(undef, 0)
     kernel1 = @oneapi launch=false _parallel_reduce_oneapi(
         Val(256), N, op, ret_inst, f, x...)
@@ -259,13 +258,13 @@ function JACC.parallel_reduce(f, ::oneAPIBackend, N::Integer, x...; op, init,
 
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
 
-    @oneapi items=items groups=groups queue=stream _parallel_reduce_oneapi(
+    @oneapi items=items groups=groups _parallel_reduce_oneapi(
         Val(items), N, op, ret, f, x...)
-    oneAPI.synchronize(stream)
 
-    @oneapi items=items groups=1 queue=stream reduce_kernel_oneapi(
+    @oneapi items=items groups=1 reduce_kernel_oneapi(
         Val(items), groups, op, ret, rret)
-    oneAPI.synchronize(stream)
+
+    oneAPI.synchronize()
 
     return Base.Array(rret)[]
 end
@@ -298,28 +297,29 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
 end
 
 function JACC.parallel_reduce(f, ::oneAPIBackend, (M, N)::NTuple{2, Integer},
-        x...; op, init, stream = default_stream())
+        x...; op, init)
     numItems = 16
     Mitems = numItems
     Nitems = numItems
+    items = (Mitems, Nitems)
     Mgroups = cld(M, Mitems)
     Ngroups = cld(N, Nitems)
+    groups = (Mgroups, Ngroups)
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, (Mgroups, Ngroups)), init)
     rret = oneAPI.oneArray([init])
-    @oneapi items=(Mitems, Nitems) groups=(Mgroups, Ngroups) queue=stream _parallel_reduce_oneapi_MN(
+    @oneapi items=items groups=groups _parallel_reduce_oneapi_MN(
         (M, N), op, ret, f, x...)
-    @oneapi items=(Mitems, Nitems) groups=(1, 1) queue=stream reduce_kernel_oneapi_MN(
-        (Mgroups, Ngroups), op, ret, rret)
-    oneAPI.synchronize(stream)
+    @oneapi items=items groups=(1, 1) reduce_kernel_oneapi_MN(
+        groups, op, ret, rret)
+    oneAPI.synchronize()
     return Base.Array(rret)[]
 end
 
 @inline function JACC.parallel_reduce(f, ::oneAPIBackend,
-        dims::NTuple{N, Integer}, x...; op, init, kw...) where {N}
+        dims::NTuple{N, Integer}, x...; op, init) where {N}
     ids = CartesianIndices(dims)
-    return JACC.parallel_reduce(
-        JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
-        x...; op = op, init = init, kw...)
+    return JACC.parallel_reduce(JACC.ReduceKernel1DND{typeof(init)}(),
+        prod(dims), ids, f, x...; op = op, init = init)
 end
 
 function _parallel_for_oneapi(N, f, x...)

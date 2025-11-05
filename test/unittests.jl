@@ -251,6 +251,13 @@ end
     JACC.parallel_for(JACC.launch_spec(; threads = 1000), N, a_device) do i, a
         @inbounds a[i] += 5.0
     end
+    @test JACC.to_host(a_device)≈a_expected rtol=1e-5
+    a_expected = a_expected .+ 5.0
+    JACC.parallel_for(dims = N, args = (a_device,),
+        f = (i, a) -> begin
+            @inbounds a[i] += 5.0
+        end, threads = 1000,
+        sync = false)
     JACC.synchronize()
     @test JACC.to_host(a_device)≈a_expected rtol=1e-5
 
@@ -264,7 +271,6 @@ end
         end,
         A, B, C)
     C_expected = Float32(2.0) .* ones(Float32, N, N)
-    JACC.synchronize()
     @test JACC.to_host(C)≈C_expected rtol=1e-5
 
     # 3D
@@ -278,7 +284,6 @@ end
         end,
         A, B, C)
     C_expected = Float32(2.0) .* ones(Float32, N, N, N)
-    JACC.synchronize()
     @test JACC.to_host(C)≈C_expected rtol=1e-5
 
     # reduce
@@ -286,6 +291,12 @@ end
     res = JACC.parallel_reduce(JACC.launch_spec(), a)
     @test JACC.to_host(res)[] == N
     res = JACC.parallel_reduce(JACC.launch_spec(), N, (i, a) -> a[i], a)
+    @test JACC.to_host(res)[] == N
+    res = JACC.parallel_reduce(
+        dims = N, f = (i, a) -> begin
+            a[i]
+        end, args = (a,), sync = false)
+    JACC.synchronize()
     @test JACC.to_host(res)[] == N
     res = JACC.parallel_reduce(JACC.launch_spec(), min, a)
     @test JACC.to_host(res)[] == 1
@@ -301,7 +312,8 @@ end
     res = JACC.parallel_reduce(JACC.launch_spec(), min, a2)
     @test JACC.to_host(res)[] == 1
     res = JACC.parallel_reduce(
-        JACC.launch_spec(), (N, N), (i, j, a) -> a[i, j], a2; op = max, init = -Inf)
+        JACC.launch_spec(), (N, N), (i, j, a) -> a[i, j],
+        a2; op = max, init = -Inf)
     @test JACC.to_host(res)[] == 1
 end
 

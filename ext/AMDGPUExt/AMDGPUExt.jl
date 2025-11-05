@@ -276,8 +276,7 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
     return nothing
 end
 
-function JACC.parallel_reduce(f, ::AMDGPUBackend, N::Integer, x...; op, init,
-        stream = default_stream())
+function JACC.parallel_reduce(f, ::AMDGPUBackend, N::Integer, x...; op, init)
     ret_inst = AMDGPU.ROCArray{typeof(init)}(undef, 0)
     kernel1 = @roc launch=false _parallel_reduce_amdgpu(
         N, op, ret_inst, f, x...)
@@ -297,13 +296,11 @@ function JACC.parallel_reduce(f, ::AMDGPUBackend, N::Integer, x...; op, init,
     ret = fill!(AMDGPU.ROCArray{typeof(init)}(undef, blocks), init)
 
     kargs1 = kernel_args(N, op, ret, f, x...)
-    kernel1(kargs1...; groupsize = threads, gridsize = blocks,
-        shmem = shmem_size, stream = stream)
+    kernel1(kargs1...; groupsize = threads, gridsize = blocks, shmem = shmem_size)
 
     kargs2 = kernel_args(blocks, op, ret, rret)
-    kernel2(kargs2...; groupsize = threads, gridsize = 1,
-        shmem = shmem_size, stream = stream)
-    AMDGPU.synchronize(stream)
+    kernel2(kargs2...; groupsize = threads, gridsize = 1, shmem = shmem_size)
+    AMDGPU.synchronize()
 
     return Base.Array(rret)[]
 end
@@ -342,7 +339,7 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{AMDGPUBackend},
 end
 
 function JACC.parallel_reduce(f, ::AMDGPUBackend, (M, N)::NTuple{2, Integer},
-        x...; op, init, stream = default_stream())
+        x...; op, init)
     numThreads = 16
     Mthreads = numThreads
     Nthreads = numThreads
@@ -356,22 +353,20 @@ function JACC.parallel_reduce(f, ::AMDGPUBackend, (M, N)::NTuple{2, Integer},
 
     kargs1 = kernel_args((M, N), op, ret, f, x...)
     kernel1 = @roc launch=false _parallel_reduce_amdgpu_MN(kargs1...)
-    kernel1(kargs1...; groupsize = threads, gridsize = blocks,
-        shmem = shmem_size, stream = stream)
+    kernel1(kargs1...; groupsize = threads, gridsize = blocks, shmem = shmem_size)
     kargs2 = kernel_args(blocks, op, ret, rret)
     kernel2 = @roc launch=false reduce_kernel_amdgpu_MN(kargs2...)
     kernel2(kargs2...; groupsize = threads, gridsize = (1, 1),
-        shmem = shmem_size, stream = stream)
-    AMDGPU.synchronize(stream)
+        shmem = shmem_size)
+    AMDGPU.synchronize()
     return Base.Array(rret)[]
 end
 
 @inline function JACC.parallel_reduce(f, ::AMDGPUBackend,
-        dims::NTuple{N, Integer}, x...; op, init, kw...) where {N}
+        dims::NTuple{N, Integer}, x...; op, init) where {N}
     ids = CartesianIndices(dims)
-    return JACC.parallel_reduce(
-        JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
-        x...; op = op, init = init, kw...)
+    return JACC.parallel_reduce(JACC.ReduceKernel1DND{typeof(init)}(),
+        prod(dims), ids, f, x...; op = op, init = init)
 end
 
 function _parallel_for_amdgpu(N, f, x...)

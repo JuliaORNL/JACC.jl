@@ -271,8 +271,7 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{CUDABackend},
     return nothing
 end
 
-function JACC.parallel_reduce(f, ::CUDABackend, N::Integer, x...; op, init,
-        stream = default_stream())
+function JACC.parallel_reduce(f, ::CUDABackend, N::Integer, x...; op, init)
     ret_inst = CUDA.CuArray{typeof(init)}(undef, 0)
 
     kargs_1 = kernel_args(N, op, ret_inst, f, x...)
@@ -289,14 +288,12 @@ function JACC.parallel_reduce(f, ::CUDABackend, N::Integer, x...; op, init,
 
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, blocks), init)
     kargs = kernel_args(N, op, ret, f, x...)
-    kernel_1(kargs...; threads = threads, blocks = blocks,
-        shmem = shmem_size, stream = stream)
+    kernel_1(kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
 
     kargs = kernel_args(blocks, op, ret, rret)
-    kernel_2(kargs...; threads = threads, blocks = 1,
-        shmem = shmem_size, stream = stream)
+    kernel_2(kargs...; threads = threads, blocks = 1, shmem = shmem_size)
 
-    CUDA.synchronize(stream)
+    CUDA.synchronize()
 
     return Base.Array(rret)[]
 end
@@ -330,8 +327,8 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{CUDABackend},
     return nothing
 end
 
-function JACC.parallel_reduce(f, ::CUDABackend, (M, N)::NTuple{2, Integer},
-        x...; op, init, stream = default_stream())
+function JACC.parallel_reduce(
+        f, ::CUDABackend, (M, N)::NTuple{2, Integer}, x...; op, init)
     numThreads = 16
     Mthreads = numThreads
     Nthreads = numThreads
@@ -340,20 +337,19 @@ function JACC.parallel_reduce(f, ::CUDABackend, (M, N)::NTuple{2, Integer},
     ret = fill!(CUDA.CuArray{typeof(init)}(undef, (Mblocks, Nblocks)), init)
     rret = CUDA.CuArray([init])
     shmem_size = 16 * 16 * sizeof(init)
-    @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=shmem_size stream=stream _parallel_reduce_cuda_MN(
+    @cuda threads=(Mthreads, Nthreads) blocks=(Mblocks, Nblocks) shmem=shmem_size _parallel_reduce_cuda_MN(
         (M, N), op, ret, f, x...)
-    @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=shmem_size stream=stream reduce_kernel_cuda_MN(
+    @cuda threads=(Mthreads, Nthreads) blocks=(1, 1) shmem=shmem_size reduce_kernel_cuda_MN(
         (Mblocks, Nblocks), op, ret, rret)
-    CUDA.synchronize(stream)
+    CUDA.synchronize()
     return Base.Array(rret)[]
 end
 
 @inline function JACC.parallel_reduce(f, ::CUDABackend,
-        dims::NTuple{N, Integer}, x...; op, init, kw...) where {N}
+        dims::NTuple{N, Integer}, x...; op, init) where {N}
     ids = CartesianIndices(dims)
-    return JACC.parallel_reduce(
-        JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
-        x...; op = op, init = init, kw...)
+    return JACC.parallel_reduce(JACC.ReduceKernel1DND{typeof(init)}(),
+        prod(dims), ids, f, x...; op = op, init = init)
 end
 
 function _parallel_for_cuda(N, f, x...)

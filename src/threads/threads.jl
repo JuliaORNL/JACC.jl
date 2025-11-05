@@ -131,9 +131,9 @@ end
 end
 
 @inline function JACC.parallel_reduce(
-        f, ::ThreadsBackend, N::Integer, x...; op, init, kw...)
+        f, ::ThreadsBackend, N::Integer, x...; op, init)
     reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        dims = N, op = op, init = init, kw...)
+        dims = N, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
@@ -183,19 +183,20 @@ end
 end
 
 @inline function JACC.parallel_reduce(f, ::ThreadsBackend,
-        (M, N)::NTuple{2, Integer}, x...; op, init, kw...)
+        (M, N)::NTuple{2, Integer}, x...; op, init)
     reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        dims = (M, N), op = op, init = init, kw...)
+        dims = (M, N), op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
 
-@inline function JACC.parallel_reduce(f, ::ThreadsBackend, dims::NTuple{N, Integer},
-        x...; op, init, kw...) where {N}
+@inline function JACC.parallel_reduce(
+        f, ::ThreadsBackend, dims::NTuple{N, Integer},
+        x...; op, init) where {N}
     ids = CartesianIndices(dims)
     return JACC.parallel_reduce(
         JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
-        x...; op = op, init = init, kw...)
+        x...; op = op, init = init)
 end
 
 module Detail
