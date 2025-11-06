@@ -145,7 +145,9 @@ function set_init!(reducer::ParallelReduce{B, T}, init) where {B, T}
     reducer.init = convert(T, init)
 end
 
-get_result(reducer::ParallelReduce) = get_result(reducer.workspace)
+@inline function get_result(reducer::ParallelReduce{B, T}) where {B, T}
+    get_result(reducer.workspace)::T
+end
 
 @inline _resolve_init_type(op, type, init) = convert(type, init)
 @inline _resolve_init_type(op, type, init::Nothing) = default_init(type, op)

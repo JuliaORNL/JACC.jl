@@ -82,13 +82,13 @@ end
 
 @inline function JACC.reduce_workspace(::ThreadsBackend, init::T) where {T}
     if Threads.nthreads() == 1
-        ThreadsReduceWorkspace{T}([], [init])
+        ThreadsReduceWorkspace{T}(T[], [init])
     else
         ThreadsReduceWorkspace{T}(Vector{T}(undef, Threads.nthreads()), [init])
     end
 end
 
-JACC.get_result(wk::ThreadsReduceWorkspace) = wk.ret[]
+@inline JACC.get_result(wk::ThreadsReduceWorkspace{T}) where {T} = wk.ret[]::T
 
 @inline function _serial_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
         N::Integer, f, x...)
@@ -119,6 +119,7 @@ end
         end
     end
     wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    return nothing
 end
 
 @inline function JACC._parallel_reduce!(
@@ -128,6 +129,7 @@ end
     else
         _chunk_reduce!(reducer, N, f, x...)
     end
+    return nothing
 end
 
 @inline function JACC.parallel_reduce(
@@ -170,6 +172,7 @@ end
         end
     end
     wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    return nothing
 end
 
 @inline function JACC._parallel_reduce!(
@@ -180,6 +183,7 @@ end
     else
         _chunk_reduce!(reducer, (M, N), f, x...)
     end
+    return nothing
 end
 
 @inline function JACC.parallel_reduce(f, ::ThreadsBackend,
@@ -192,7 +196,7 @@ end
 
 @inline function JACC.parallel_reduce(
         f, ::ThreadsBackend, dims::NTuple{N, Integer},
-        x...; op, init) where {N}
+        x...; op, init)::typeof(init) where {N}
     ids = CartesianIndices(dims)
     return JACC.parallel_reduce(
         JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
