@@ -31,11 +31,13 @@ end
     y = JACC.fill(10, (N,))
     @test typeof(y) == AMDGPU.ROCArray{Int, 1, AMDGPU.Runtime.Mem.HIPBuffer}
     x2 = JACC.fill(10.0, N, N)
-    @test typeof(x2) == AMDGPU.ROCArray{Float64, 2, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x2) ==
+          AMDGPU.ROCArray{Float64, 2, AMDGPU.Runtime.Mem.HIPBuffer}
     y2 = JACC.fill(10, (N, N))
     @test typeof(y2) == AMDGPU.ROCArray{Int, 2, AMDGPU.Runtime.Mem.HIPBuffer}
     x3 = JACC.fill(10.0, N, N, N)
-    @test typeof(x3) == AMDGPU.ROCArray{Float64, 3, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x3) ==
+          AMDGPU.ROCArray{Float64, 3, AMDGPU.Runtime.Mem.HIPBuffer}
     y3 = JACC.fill(10, (N, N, N))
     @test typeof(y3) == AMDGPU.ROCArray{Int, 3, AMDGPU.Runtime.Mem.HIPBuffer}
 end

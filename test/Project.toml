@@ -1,5 +1,6 @@
 [deps]
 ChangePrecision = "3cb15238-376d-56a3-8042-d33272777c9a"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 ReTest = "e0db7c4e-2690-44b9-bad6-7687da720f89"

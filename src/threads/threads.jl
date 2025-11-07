@@ -1,6 +1,5 @@
 module ThreadsImpl
 
-import Base: Callable
 import JACC
 import JACC: LaunchSpec
 
@@ -31,16 +30,16 @@ JACC.synchronize(::ThreadsBackend) = nothing
 
 JACC.default_stream(::Type{ThreadsBackend}) = nothing
 
-@inline function JACC.parallel_for(::ThreadsBackend, N::Integer, f::Callable, x...)
+@inline function JACC.parallel_for(f, ::ThreadsBackend, N::Integer, x...)
     @maybe_threaded for i in 1:N
         f(i, x...)
     end
 end
 
 @inline function JACC.parallel_for(
-        spec::LaunchSpec{ThreadsBackend}, N::Integer, f::Callable, x...)
+        f, spec::LaunchSpec{ThreadsBackend}, N::Integer, x...)
     if spec.threads == 0
-        JACC.parallel_for(ThreadsBackend(), N, f, x...)
+        JACC.parallel_for(f, ThreadsBackend(), N, x...)
     else
         _BARRIER[] = Detail.SimpleBarrier(spec.threads)
         fetch.([Threads.@spawn f(i, x...) for i in 1:N])
@@ -49,31 +48,31 @@ end
 end
 
 @inline function JACC.parallel_for(
-        ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        f, ::ThreadsBackend, (M, N)::NTuple{2, Integer}, x...)
     @maybe_threaded for ij in CartesianIndices((M, N))
         f(ij[1], ij[2], x...)
     end
 end
 
-@inline function JACC.parallel_for(spec::LaunchSpec{ThreadsBackend},
-        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+@inline function JACC.parallel_for(f, spec::LaunchSpec{ThreadsBackend},
+        (M, N)::NTuple{2, Integer}, x...)
     ids = CartesianIndices((M, N))
-    JACC.parallel_for(JACC.launch_spec(threads = prod(spec.threads)),
-        length(ids), i -> f(ids[i][1], ids[i][2], x...))
+    JACC.parallel_for(i -> f(ids[i][1], ids[i][2], x...),
+        JACC.launch_spec(threads = prod(spec.threads)), length(ids))
 end
 
 @inline function JACC.parallel_for(
-        ::ThreadsBackend, (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
+        f, ::ThreadsBackend, (L, M, N)::NTuple{3, Integer}, x...)
     @maybe_threaded for ijk in CartesianIndices((L, M, N))
         f(ijk[1], ijk[2], ijk[3], x...)
     end
 end
 
-@inline function JACC.parallel_for(spec::LaunchSpec{ThreadsBackend},
-        (L, M, N)::NTuple{3, Integer}, f::Callable, x...)
+@inline function JACC.parallel_for(f, spec::LaunchSpec{ThreadsBackend},
+        (L, M, N)::NTuple{3, Integer}, x...)
     ids = CartesianIndices((L, M, N))
-    JACC.parallel_for(JACC.launch_spec(threads = prod(spec.threads)),
-        length(ids), i -> f(ids[i][1], ids[i][2], ids[i][3], x...))
+    JACC.parallel_for(i -> f(ids[i][1], ids[i][2], ids[i][3], x...),
+        JACC.launch_spec(threads = prod(spec.threads)), length(ids))
 end
 
 mutable struct ThreadsReduceWorkspace{T} <: JACC.ReduceWorkspace
@@ -83,16 +82,16 @@ end
 
 @inline function JACC.reduce_workspace(::ThreadsBackend, init::T) where {T}
     if Threads.nthreads() == 1
-        ThreadsReduceWorkspace{T}([], [init])
+        ThreadsReduceWorkspace{T}(T[], [init])
     else
         ThreadsReduceWorkspace{T}(Vector{T}(undef, Threads.nthreads()), [init])
     end
 end
 
-JACC.get_result(wk::ThreadsReduceWorkspace) = wk.ret[]
+@inline JACC.get_result(wk::ThreadsReduceWorkspace{T}) where {T} = wk.ret[]::T
 
 @inline function _serial_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
-        N::Integer, f::Callable, x...)
+        N::Integer, f, x...)
     wk = reducer.workspace
     op = reducer.op
     tmp = reducer.init
@@ -104,7 +103,7 @@ JACC.get_result(wk::ThreadsReduceWorkspace) = wk.ret[]
 end
 
 @inline function _chunk_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
-        N::Integer, f::Callable, x...)
+        N::Integer, f, x...)
     wk = reducer.workspace
     op = reducer.op
     nchunks = Threads.nthreads()
@@ -120,36 +119,29 @@ end
         end
     end
     wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    return nothing
 end
 
 @inline function JACC._parallel_reduce!(
-        reducer::JACC.ParallelReduce{ThreadsBackend},
-        N::Integer, f::Callable, x...)
+        reducer::JACC.ParallelReduce{ThreadsBackend}, N::Integer, f, x...)
     if Threads.nthreads() == 1
         _serial_reduce!(reducer, N, f, x...)
     else
         _chunk_reduce!(reducer, N, f, x...)
     end
+    return nothing
 end
 
 @inline function JACC.parallel_reduce(
-        ::ThreadsBackend, N::Integer, op, f::Callable, x...; init)
+        f, ::ThreadsBackend, N::Integer, x...; op, init)
     reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
         dims = N, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
 
-@inline function JACC.parallel_reduce(
-        ::LaunchSpec{ThreadsBackend}, N::Integer, op, f::Callable, x...; init)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        dims = N, op = op, init = init)
-    reducer(f, x...)
-    return reducer.workspace.ret
-end
-
 @inline function _serial_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
-        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        (M, N)::NTuple{2, Integer}, f, x...)
     wk = reducer.workspace
     op = reducer.op
     tmp = reducer.init
@@ -163,7 +155,7 @@ end
 end
 
 @inline function _chunk_reduce!(reducer::JACC.ParallelReduce{ThreadsBackend},
-        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        (M, N)::NTuple{2, Integer}, f, x...)
     wk = reducer.workspace
     op = reducer.op
     ids = CartesianIndices((1:M, 1:N))
@@ -180,32 +172,35 @@ end
         end
     end
     wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    return nothing
 end
 
 @inline function JACC._parallel_reduce!(
         reducer::JACC.ParallelReduce{ThreadsBackend},
-        (M, N)::NTuple{2, Integer}, f::Callable, x...)
+        (M, N)::NTuple{2, Integer}, f, x...)
     if Threads.nthreads() == 1
         _serial_reduce!(reducer, (M, N), f, x...)
     else
         _chunk_reduce!(reducer, (M, N), f, x...)
     end
+    return nothing
 end
 
-@inline function JACC.parallel_reduce(
-        ::ThreadsBackend, (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
+@inline function JACC.parallel_reduce(f, ::ThreadsBackend,
+        (M, N)::NTuple{2, Integer}, x...; op, init)
     reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
         dims = (M, N), op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
 
-@inline function JACC.parallel_reduce(::LaunchSpec{ThreadsBackend},
-        (M, N)::NTuple{2, Integer}, op, f::Callable, x...; init)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        dims = (M, N), op = op, init = init)
-    reducer(f, x...)
-    return reducer.workspace.ret
+@inline function JACC.parallel_reduce(
+        f, ::ThreadsBackend, dims::NTuple{N, Integer},
+        x...; op, init)::typeof(init) where {N}
+    ids = CartesianIndices(dims)
+    return JACC.parallel_reduce(
+        JACC.ReduceKernel1DND{typeof(init)}(), prod(dims), ids, f,
+        x...; op = op, init = init)
 end
 
 module Detail
