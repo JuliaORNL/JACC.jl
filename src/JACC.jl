@@ -27,6 +27,8 @@ export shared
 export LaunchSpec
 export synchronize
 
+ilog2(n::T) where {T <: Integer} = sizeof(T) * 8 - 1 - leading_zeros(n)
+
 function default_stream end
 
 @kwdef mutable struct LaunchSpec{Backend}
