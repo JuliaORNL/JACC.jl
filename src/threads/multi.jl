@@ -35,22 +35,24 @@ end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
-    return JACC.parallel_for(ThreadsBackend(), N, f, x...)
+    return JACC.parallel_for(f, ThreadsBackend(), N, x...)
 end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_for(ThreadsBackend(), (M,N), f, x...)
+    return JACC.parallel_for(f, ThreadsBackend(), (M,N), x...)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, N::Integer, f::Callable, x...)
-    return JACC.parallel_reduce(ThreadsBackend(), N, +, f, x...; init = 0.0)
+    return JACC.parallel_reduce(f, ThreadsBackend(), N, x...; op = +,
+        init = 0.0)
 end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_reduce(ThreadsBackend(), (M,N), +, f, x...; init = 0.0)
+    return JACC.parallel_reduce(f, ThreadsBackend(), (M,N), x...; op = +,
+        init = 0.0)
 end
 
 end

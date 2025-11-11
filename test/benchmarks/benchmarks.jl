@@ -42,7 +42,7 @@ function run_benchmark_set(set, x...)
     end
 end
 
-function axpy_jacc(SIZE::JACC.Dims, alpha, x, y)
+function axpy_jacc(SIZE::JACC.IDims, alpha, x, y)
     JACC.parallel_for(SIZE, axpy, alpha, x, y)
 end
 
@@ -68,7 +68,7 @@ end
     axpy_benchmark("AXPY 2D", SIZE)
 end
 
-function dot_jacc(SIZE::JACC.Dims, x, y)
+function dot_jacc(SIZE::JACC.IDims, x, y)
     JACC.parallel_reduce(SIZE, dot, x, y)
 end
 

@@ -4,39 +4,35 @@ import Base: Callable
 using JACC
 using JACC.ThreadsImpl: ThreadsBackend
 
-function JACC.Async.array(::ThreadsBackend, queue_id::Integer,
-        x::Base.Array{T, N}) where {T, N}
+function JACC.Async.zeros(::ThreadsBackend, T, id, dims...)
+    JACC.zeros(ThreadsBackend(), T, dims...)
+end
+
+function JACC.Async.ones(::ThreadsBackend, T, id, dims...)
+    JACC.ones(ThreadsBackend(), T, dims...)
+end
+
+function JACC.Async.fill(::ThreadsBackend, id, value, dims...)
+    JACC.fill(ThreadsBackend(), value, dims...)
+end
+
+function JACC.Async.synchronize(::ThreadsBackend, id = 0)
+end
+
+function JACC.Async.array(::ThreadsBackend, id::Integer, x::AbstractArray)
     return JACC.array(x)
 end
 
-function JACC.Async.copy(
-        ::ThreadsBackend, queue_id_dest::Integer, x::Base.Array{T, N},
-        queue_id_orig::Integer, y::Base.Array{T, N}) where {T, N}
-    copyto!(x, y)
-end
-
 function JACC.Async.parallel_for(
-        ::ThreadsBackend, queue_id::Integer, N::Integer, f::Callable,
-        x...)
-    JACC.parallel_for(N, f, x...)
+        ::ThreadsBackend, id::Integer, dims::JACC.IDims, f::Callable, x...)
+    JACC.parallel_for(f, ThreadsBackend(), dims, x...)
 end
 
-function JACC.Async.parallel_for(
-        ::ThreadsBackend, queue_id::Integer, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    JACC.parallel_for((M, N), f, x...)
-end
-
-function JACC.Async.parallel_reduce(
-        ::ThreadsBackend, queue_id::Integer, N::Integer, f::Callable, x...)
-    return JACC.parallel_reduce(N, f, x...)
-end
-
-function JACC.Async.parallel_reduce(
-        ::ThreadsBackend, queue_id::Integer, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_reduce((M, N), f, x...)
-end
-
-function JACC.Async.synchronize(::ThreadsBackend)
+function JACC.Async.parallel_reduce(::ThreadsBackend, id::Integer,
+        dims::JACC.IDims, op::Callable, f::Callable, x...; init)
+    ret = JACC.parallel_reduce(
+        f, ThreadsBackend(), dims, x...; op = op, init = init)
+    return [ret]
 end
 
 end

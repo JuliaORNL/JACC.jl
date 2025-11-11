@@ -2,7 +2,6 @@ module JACCTests
 
 import JACC
 using ReTest
-using ..JACCTestCommon
 
 if JACC.backend == "cuda"
     include("backend/cuda.jl")
