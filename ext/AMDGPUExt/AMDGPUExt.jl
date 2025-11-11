@@ -398,69 +398,59 @@ end
 
 function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     shmem_length = workgroupDim().x
-    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length, false)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     ti = workitemIdx().x
-    shared_mem[ti] = ret[workgroupIdx().x]
+    @inbounds shared_mem[ti] = ret[workgroupIdx().x]
 
     if i <= N
         tmp = f(i, x...)
         @inbounds shared_mem[ti] = tmp
     end
-    AMDGPU.sync_workgroup()
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
-    for p in (max_pwr:-1:1)
+    max_pwr = JACC.ilog2(shmem_length) - 1
+    for p in (max_pwr:-1:0)
+        AMDGPU.sync_workgroup()
         tn = 2^p
         if ti <= tn
-            shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
+            @inbounds shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + tn])
         end
-        AMDGPU.sync_workgroup()
     end
 
     if ti == 1
-        shared_mem[ti] = op(shared_mem[ti], shared_mem[ti + 1])
-        ret[workgroupIdx().x] = shared_mem[ti]
+        @inbounds ret[workgroupIdx().x] = shared_mem[ti]
     end
-
     return nothing
 end
 
 function reduce_kernel_amdgpu(N, op, red, ret)
     shmem_length = workgroupDim().x
-    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length, false)
     i = workitemIdx().x
     ii = i
-    tmp = ret[1]
-    if N > shmem_length
-        for ii in i:shmem_length:N
-            tmp = op(tmp, @inbounds red[ii])
-        end
-    elseif (i <= N)
-        tmp = @inbounds red[i]
+    @inbounds tmp = ret[1]
+    for ii in i:shmem_length:N
+        tmp = op(tmp, @inbounds red[ii])
     end
-    shared_mem[i] = tmp
-    AMDGPU.sync_workgroup()
+    @inbounds shared_mem[i] = tmp
 
-    max_pwr = floor(Int, log2(shmem_length)) - 1
-    for p in (max_pwr:-1:1)
+    max_pwr = JACC.ilog2(shmem_length) - 1
+    for p in (max_pwr:-1:0)
+        AMDGPU.sync_workgroup()
         tn = 2^p
         if i <= tn
-            shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
+            @inbounds shared_mem[i] = op(shared_mem[i], shared_mem[i + tn])
         end
-        AMDGPU.sync_workgroup()
     end
 
     if i == 1
-        shared_mem[i] = op(shared_mem[i], shared_mem[i + 1])
-        ret[1] = shared_mem[1]
+        @inbounds ret[1] = shared_mem[1]
     end
-
     return nothing
 end
 
 function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
-    shared_mem = @ROCDynamicLocalArray(eltype(ret), 256, false)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), (16, 16), false)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     ti = workitemIdx().x
@@ -468,135 +458,50 @@ function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
     bi = workgroupIdx().x
     bj = workgroupIdx().y
 
-    sid = ((ti - 1) * 16) + tj
-    shared_mem[sid] = ret[bi, bj]
+    @inbounds shared_mem[ti, tj] = ret[bi, bj]
 
     if (i <= M && j <= N)
         tmp = f(i, j, x...)
-        @inbounds shared_mem[sid] = tmp
+        @inbounds shared_mem[ti, tj] = tmp
     end
-    AMDGPU.sync_workgroup()
-    if (ti <= 8 && tj <= 8)
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti + 7) * 16) + (tj + 8)])
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 8)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 7) * 16) + tj])
+
+    for n in (8, 4, 2, 1)
+        AMDGPU.sync_workgroup()
+        if ti <= n && tj <= n
+            @inbounds shared_mem[ti, tj] = op(shared_mem[ti, tj], shared_mem[ti + n, tj + n])
+            @inbounds shared_mem[ti, tj] = op(shared_mem[ti, tj], shared_mem[ti, tj + n])
+            @inbounds shared_mem[ti, tj] = op(shared_mem[ti, tj], shared_mem[ti + n, tj])
+        end
     end
-    AMDGPU.sync_workgroup()
-    if (ti <= 4 && tj <= 4)
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti + 3) * 16) + (tj + 4)])
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 4)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 3) * 16) + tj])
-    end
-    AMDGPU.sync_workgroup()
-    if (ti <= 2 && tj <= 2)
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti + 1) * 16) + (tj + 2)])
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 2)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[((ti + 1) * 16) + tj])
-    end
-    AMDGPU.sync_workgroup()
+
     if (ti == 1 && tj == 1)
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[ti * 16 + (tj + 1)])
-        shared_mem[sid] = op(
-            shared_mem[sid], shared_mem[((ti - 1) * 16) + (tj + 1)])
-        shared_mem[sid] = op(shared_mem[sid], shared_mem[ti * 16 + tj])
-        ret[bi, bj] = shared_mem[sid]
+        @inbounds ret[bi, bj] = shared_mem[ti, tj]
     end
     return nothing
 end
 
 function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
-    shared_mem = @ROCDynamicLocalArray(eltype(ret), 256)
+    shared_mem = @ROCDynamicLocalArray(eltype(ret), (16, 16), false)
     i = workitemIdx().x
     j = workitemIdx().y
 
-    tmp = ret[1]
-    sid = ((i - 1) * 16) + j
-    shared_mem[sid] = tmp
+    @inbounds tmp = ret[1]
+    for ci in CartesianIndices((i:16:M, j:16:N))
+        tmp = op(tmp, @inbounds red[ci])
+    end
+    @inbounds shared_mem[i, j] = tmp
 
-    if M > 16 && N > 16
-        for ii in i:16:M
-            for jj in j:16:N
-                tmp = op(tmp, @inbounds red[ii, jj])
-            end
-        end
-    elseif M > 16
-        for ii in i:16:M
-            tmp = op(tmp, @inbounds red[ii, j])
-        end
-    elseif N > 16
-        for jj in j:16:N
-            tmp = op(tmp, @inbounds red[i, jj])
-        end
-    elseif M <= 16 && N <= 16
-        if i <= M && j <= N
-            tmp = op(tmp, @inbounds red[i, j])
+    for n in (8, 4, 2, 1)
+        AMDGPU.sync_workgroup()
+        if i <= n && j <= n
+            @inbounds shared_mem[i, j] = op(shared_mem[i, j], shared_mem[i + n, j + n])
+            @inbounds shared_mem[i, j] = op(shared_mem[i, j], shared_mem[i, j + n])
+            @inbounds shared_mem[i, j] = op(shared_mem[i, j], shared_mem[i + n, j])
         end
     end
-    shared_mem[sid] = tmp
-    AMDGPU.sync_workgroup()
-    if (i <= 8 && j <= 8)
-        if (i + 8 <= M && j + 8 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 7) * 16) + (j + 8)])
-        end
-        if (i <= M && j + 8 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 8)])
-        end
-        if (i + 8 <= M && j <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 7) * 16) + j])
-        end
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 4 && j <= 4)
-        if (i + 4 <= M && j + 4 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 3) * 16) + (j + 4)])
-        end
-        if (i <= M && j + 4 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 4)])
-        end
-        if (i + 4 <= M && j <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 3) * 16) + j])
-        end
-    end
-    AMDGPU.sync_workgroup()
-    if (i <= 2 && j <= 2)
-        if (i + 2 <= M && j + 2 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 1) * 16) + (j + 2)])
-        end
-        if (i <= M && j + 2 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 2)])
-        end
-        if (i + 2 <= M && j <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i + 1) * 16) + j])
-        end
-    end
-    AMDGPU.sync_workgroup()
+
     if (i == 1 && j == 1)
-        if (i + 1 <= M && j + 1 <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[i * 16 + (j + 1)])
-        end
-        if (i <= M && j + 1 <= N)
-            shared_mem[sid] = op(
-                shared_mem[sid], shared_mem[((i - 1) * 16) + (j + 1)])
-        end
-        if (i + 1 <= M && j <= N)
-            shared_mem[sid] = op(shared_mem[sid], shared_mem[i * 16 + j])
-        end
-        ret[1] = shared_mem[sid]
+        @inbounds ret[1] = shared_mem[i, j]
     end
     return nothing
 end

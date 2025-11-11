@@ -1,11 +1,11 @@
 name = "JACC"
 uuid = "0979c8fe-16a4-4796-9b82-89a9f10403ea"
+version = "0.5.0"
 authors = [
-    "pedrovalerolara <valerolarap@ornl.gov>",
+    "pedrovalerolara <valerolarap@ornl.gov>", 
     "williamfgc <williamfgc@yahoo.com>",
     "PhilipFackler <facklerpw@ornl.gov>"
 ]
-version = "0.5.0"
 
 [deps]
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
@@ -23,10 +23,10 @@ CUDAExt = ["CUDA"]
 oneAPIExt = ["oneAPI"]
 
 [compat]
-AMDGPU = "=1.3.3"
-Atomix = "1.0.1"
-CUDA = "5"
-Pkg = "1.11.0"
-Preferences = "1.4.0"
-julia = "1.11"
+AMDGPU = ">=2"
+Atomix = ">=1.0.1"
+CUDA = ">=5"
+Pkg = ">=1.11.0"
+Preferences = ">=1.4.0"
+julia = ">=1.11"
 oneAPI = "=2.4"
