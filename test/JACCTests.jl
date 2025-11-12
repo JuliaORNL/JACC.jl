@@ -3,14 +3,14 @@ module JACCTests
 import JACC
 using ReTest
 
-@static if JACC.backend == "cuda"
-    include("tests_cuda.jl")
+if JACC.backend == "cuda"
+    include("backend/cuda.jl")
 elseif JACC.backend == "amdgpu"
-    include("tests_amdgpu.jl")
+    include("backend/amdgpu.jl")
 elseif JACC.backend == "oneapi"
-    include("tests_oneapi.jl")
+    include("backend/oneapi.jl")
 elseif JACC.backend == "threads"
-    include("tests_threads.jl")
+    include("backend/threads.jl")
 end
 
 const FloatType = JACC.default_float()

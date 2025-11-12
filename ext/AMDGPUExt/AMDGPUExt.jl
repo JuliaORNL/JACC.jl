@@ -91,22 +91,8 @@ function JACC.parallel_for(
     kernel = @roc launch=false _parallel_for_amdgpu_MN(indexer, (M, N), f, x...)
     config = AMDGPU.launch_configuration(kernel)
     maxThreads = config.groupsize
-    blockAttrs = (
-        max_x = props.maxThreadsDim[1],
-        max_y = props.maxThreadsDim[2],
-        total = props.maxThreadsPerBlock
-    )
-    x_thr = min(
-        blockAttrs.max_x,
-        nextpow(2, m / blockAttrs.total + 1),
-        blockAttrs.total,
-        maxThreads
-    )
-    y_thr = min(
-        blockAttrs.max_y,
-        cld(blockAttrs.total, x_thr),
-        cld(maxThreads, x_thr)
-    )
+    maxThreadsX = sqrt(maxThreads)
+    y_thr = floor(Int, (n / m) * maxThreadsX)
     x_thr = fld(maxThreads, y_thr)
     threads = (x_thr, y_thr)
     blocks = (cld(m, x_thr), cld(n, y_thr))
@@ -134,22 +120,8 @@ function JACC.parallel_for(
             m, n = (N, M)
         end
         maxThreads = config.groupsize
-        blockAttrs = (
-            max_x = props.maxThreadsDim[1],
-            max_y = props.maxThreadsDim[2],
-            total = props.maxThreadsPerBlock
-        )
-        x_thr = min(
-            blockAttrs.max_x,
-            nextpow(2, m / blockAttrs.total + 1),
-            blockAttrs.total,
-            maxThreads
-        )
-        y_thr = min(
-            blockAttrs.max_y,
-            cld(blockAttrs.total, x_thr),
-            cld(maxThreads, x_thr)
-        )
+        maxThreadsX = sqrt(maxThreads)
+        y_thr = floor(Int, (n / m) * maxThreadsX)
         x_thr = fld(maxThreads, y_thr)
         spec.threads = (x_thr, y_thr)
     end
@@ -370,33 +342,33 @@ end
         prod(dims), ids, f, x...; op = op, init = init)
 end
 
-function _parallel_for_amdgpu(N, f, x...)
+@inline function _parallel_for_amdgpu(N, f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     i > N && return nothing
-    f(i, x...)
+    @inline f(i, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_MN(indexer::BlockIndexer2D, (M, N), f, x...)
+@inline function _parallel_for_amdgpu_MN(indexer::BlockIndexer2D, (M, N), f, x...)
     i, j = indexer(workgroupIdx, workgroupDim, workitemIdx)
     i > M && return nothing
     j > N && return nothing
-    f(i, j, x...)
+    @inline f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_amdgpu_LMN((L, M, N), f, x...)
+@inline function _parallel_for_amdgpu_LMN((L, M, N), f, x...)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     k = (workgroupIdx().z - 1) * workgroupDim().z + workitemIdx().z
     i > L && return nothing
     j > M && return nothing
     k > N && return nothing
-    f(i, j, k, x...)
+    @inline f(i, j, k, x...)
     return nothing
 end
 
-function _parallel_reduce_amdgpu(N, op, ret, f, x...)
+@inline function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     shmem_length = workgroupDim().x
     shared_mem = @ROCDynamicLocalArray(eltype(ret), shmem_length, false)
     i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
@@ -404,7 +376,7 @@ function _parallel_reduce_amdgpu(N, op, ret, f, x...)
     @inbounds shared_mem[ti] = ret[workgroupIdx().x]
 
     if i <= N
-        tmp = f(i, x...)
+        tmp = @inline f(i, x...)
         @inbounds shared_mem[ti] = tmp
     end
 
@@ -461,7 +433,7 @@ function _parallel_reduce_amdgpu_MN((M, N), op, ret, f, x...)
     @inbounds shared_mem[ti, tj] = ret[bi, bj]
 
     if (i <= M && j <= N)
-        tmp = f(i, j, x...)
+        tmp = @inline f(i, j, x...)
         @inbounds shared_mem[ti, tj] = tmp
     end
 

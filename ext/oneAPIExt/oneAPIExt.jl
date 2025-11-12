@@ -21,8 +21,8 @@ end
 
 function JACC.parallel_for(f, ::oneAPIBackend, N::Integer, x...)
     kernel = @oneapi launch=false _parallel_for_oneapi(N, f, x...)
-    config_items = oneAPI.launch_configuration(kernel)
-    items = min(N, config_items)
+    config_items = div(oneAPI.launch_configuration(kernel), 2)
+    items = min(N, config_items, 256)
     groups = cld(N, items)
     kernel(N, f, x...; items = items, groups = groups)
     oneAPI.synchronize()
@@ -75,26 +75,12 @@ function JACC.parallel_for(
     end
 
     kernel = @oneapi launch=false _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
-    maxThreads = oneAPI.launch_configuration(kernel)
-    blockAttrs = (
-        max_x = props.maxGroupSizeX,
-        max_y = props.maxGroupSizeY,
-        total = props.maxTotalGroupSize
-    )
-    x_thr = min(
-        blockAttrs.max_x,
-        nextpow(2, m / blockAttrs.total + 1),
-        blockAttrs.total,
-        maxThreads
-    )
-    y_thr = min(
-        blockAttrs.max_y,
-        cld(blockAttrs.total, x_thr),
-        cld(maxThreads, x_thr)
-    )
+    maxThreads = div(oneAPI.launch_configuration(kernel), 2)
+    maxThreadsX = sqrt(maxThreads)
+    y_thr = floor(Int, (n / m) * maxThreadsX)
     x_thr = fld(maxThreads, y_thr)
     items = (x_thr, y_thr)
-    groups = (cld(m, x_thr), cld(n, y_thr))
+    groups = (cld(m, items[1]), cld(n, items[2]))
 
     kernel(indexer, (M, N), f, x...; items = items, groups = groups)
     oneAPI.synchronize()
@@ -109,29 +95,15 @@ function JACC.parallel_for(
     m, n = (M, N)
 
     kernel = @oneapi launch=false _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
-    maxThreads = oneAPI.launch_configuration(kernel)
 
     if spec.threads == 0
         if M < N && maxBlocks.x > maxBlocks.y
             indexer = BlockIndexerSwapped()
             m, n = (N, M)
         end
-        blockAttrs = (
-            max_x = props.maxGroupSizeX,
-            max_y = props.maxGroupSizeY,
-            total = props.maxTotalGroupSize
-        )
-        x_thr = min(
-            blockAttrs.max_x,
-            nextpow(2, m / blockAttrs.total + 1),
-            blockAttrs.total,
-            maxThreads
-        )
-        y_thr = min(
-            blockAttrs.max_y,
-            cld(blockAttrs.total, x_thr),
-            cld(maxThreads, x_thr)
-        )
+        maxThreads = oneAPI.launch_configuration(kernel)
+        maxThreadsX = sqrt(maxThreads)
+        y_thr = floor(Int, (n / m) * maxThreadsX)
         x_thr = fld(maxThreads, y_thr)
         spec.threads = (x_thr, y_thr)
     end
@@ -149,7 +121,7 @@ end
 
 function JACC.parallel_for(
         f, ::oneAPIBackend, (L, M, N)::NTuple{3, Integer}, x...)
-    maxItems = 16
+    maxItems = 8
     Litems = min(L, maxItems)
     Mitems = min(M, maxItems)
     Nitems = 1
@@ -164,7 +136,7 @@ end
 function JACC.parallel_for(
         f, spec::LaunchSpec{oneAPIBackend}, (L, M, N)::NTuple{3, Integer}, x...)
     if spec.threads == 0
-        maxItems = 16
+        maxItems = 8
         Litems = min(L, maxItems)
         Mitems = min(M, maxItems)
         Nitems = 1
@@ -237,7 +209,6 @@ function JACC._parallel_reduce!(reducer::JACC.ParallelReduce{oneAPIBackend},
 
     kernel1(Val(threads), N, op, wk.tmp, f, x...; items = threads,
         groups = blocks, queue = reducer.stream)
-
     kernel2(Val(threads), blocks, op, wk.tmp, wk.ret; items = threads,
         groups = 1, queue = reducer.stream)
 
@@ -259,7 +230,7 @@ function JACC.parallel_reduce(f, ::oneAPIBackend, N::Integer, x...; op, init)
         Val(256), 1, op, ret_inst, rret)
     threads2 = oneAPI.launch_configuration(kernel2)
 
-    items = min(threads1, threads2, 256)
+    items = 256
     groups = cld(N, items)
 
     ret = fill!(oneAPI.oneArray{typeof(init)}(undef, groups), init)
@@ -328,29 +299,29 @@ end
         prod(dims), ids, f, x...; op = op, init = init)
 end
 
-function _parallel_for_oneapi(N, f, x...)
+@inline function _parallel_for_oneapi(N, f, x...)
     i = get_global_id()
     i > N && return nothing
-    f(i, x...)
+    @inline f(i, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
+@inline function _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
     i, j = indexer()
     i > M && return nothing
     j > N && return nothing
-    f(i, j, x...)
+    @inline f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_oneapi_LMN((L, M, N), f, x...)
+@inline function _parallel_for_oneapi_LMN((L, M, N), f, x...)
     i = get_global_id(1)
     j = get_global_id(2)
     k = get_global_id(3)
     i > L && return nothing
     j > M && return nothing
     k > N && return nothing
-    f(i, j, k, x...)
+    @inline f(i, j, k, x...)
     return nothing
 end
 
@@ -362,7 +333,7 @@ function _parallel_reduce_oneapi(
     @inbounds shared_mem[ti] = ret[get_group_id()]
 
     if i <= N
-        tmp = f(i, x...)
+        tmp = @inline f(i, x...)
         @inbounds shared_mem[ti] = tmp
     end
 
@@ -419,7 +390,7 @@ function _parallel_reduce_oneapi_MN((M, N), op, ret, f, x...)
     @inbounds shared_mem[ti, tj] = ret[bi, bj]
 
     if (i <= M && j <= N)
-        tmp = f(i, j, x...)
+        tmp = @inline f(i, j, x...)
         @inbounds shared_mem[ti, tj] = tmp
     end
 

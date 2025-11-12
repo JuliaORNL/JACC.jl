@@ -93,21 +93,8 @@ function JACC.parallel_for(f, ::CUDABackend, (M, N)::NTuple{2, Integer}, x...)
 
     kargs = kernel_args(indexer, (M, N), f, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda_MN, kargs)
-    blockAttrs = (
-        max_x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
-        max_y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
-        total = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK))
-    x_thr = min(
-        blockAttrs.max_x,
-        nextpow(2, m / blockAttrs.total + 1),
-        blockAttrs.total,
-        maxThreads
-    )
-    y_thr = min(
-        blockAttrs.max_y,
-        cld(blockAttrs.total, x_thr),
-        cld(maxThreads, x_thr)
-    )
+    maxThreadsX = sqrt(maxThreads)
+    y_thr = floor(Int, (n / m) * maxThreadsX)
     x_thr = fld(maxThreads, y_thr)
     threads = (x_thr, y_thr)
     blocks = (cld(m, x_thr), cld(n, y_thr))
@@ -136,21 +123,8 @@ function JACC.parallel_for(
             indexer = BlockIndexerSwapped()
             m, n = (N, M)
         end
-        blockAttrs = (
-            max_x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
-            max_y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
-            total = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK))
-        x_thr = min(
-            blockAttrs.max_x,
-            nextpow(2, m / blockAttrs.total + 1),
-            blockAttrs.total,
-            maxThreads
-        )
-        y_thr = min(
-            blockAttrs.max_y,
-            cld(blockAttrs.total, x_thr),
-            cld(maxThreads, x_thr)
-        )
+        maxThreadsX = sqrt(maxThreads)
+        y_thr = floor(Int, (n / m) * maxThreadsX)
         x_thr = fld(maxThreads, y_thr)
         spec.threads = (x_thr, y_thr)
     end
@@ -352,29 +326,29 @@ end
         prod(dims), ids, f, x...; op = op, init = init)
 end
 
-function _parallel_for_cuda(N, f, x...)
+@inline function _parallel_for_cuda(N, f, x...)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     i > N && return nothing
-    f(i, x...)
+    @inline f(i, x...)
     return nothing
 end
 
-function _parallel_for_cuda_MN(indexer::BlockIndexer2D, (M, N), f, x...)
+@inline function _parallel_for_cuda_MN(indexer::BlockIndexer2D, (M, N), f, x...)
     i, j = indexer(blockIdx, blockDim, threadIdx)
     i > M && return nothing
     j > N && return nothing
-    f(i, j, x...)
+    @inline f(i, j, x...)
     return nothing
 end
 
-function _parallel_for_cuda_LMN((L, M, N), f, x...)
+@inline function _parallel_for_cuda_LMN((L, M, N), f, x...)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
     i > L && return nothing
     j > M && return nothing
     k > N && return nothing
-    f(i, j, k, x...)
+    @inline f(i, j, k, x...)
     return nothing
 end
 
@@ -386,7 +360,7 @@ function _parallel_reduce_cuda(N, op, ret, f, x...)
     @inbounds shared_mem[ti] = ret[blockIdx().x]
 
     if i <= N
-        tmp = f(i, x...)
+        tmp = @inline f(i, x...)
         @inbounds shared_mem[ti] = tmp
     end
 
@@ -443,7 +417,7 @@ function _parallel_reduce_cuda_MN((M, N), op, ret, f, x...)
     @inbounds shared_mem[ti, tj] = ret[bi, bj]
 
     if (i <= M && j <= N)
-        tmp = f(i, j, x...)
+        tmp = @inline f(i, j, x...)
         @inbounds shared_mem[ti, tj] = tmp
     end
 
