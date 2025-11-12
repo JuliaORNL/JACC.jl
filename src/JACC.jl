@@ -102,9 +102,9 @@ reduce_workspace() = reduce_workspace(default_backend(), default_float()())
 
 reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
 
-@kwdef mutable struct ParallelReduce{Backend, T}
+@kwdef mutable struct ParallelReduce{Backend, T, Op}
     dims::AllDims = 0
-    op = () -> nothing
+    op::Op = () -> nothing
     init::T = default_init(T, op)
     stream = default_stream(Backend)
     sync::Bool = true
@@ -113,7 +113,7 @@ end
 
 @inline function reducer(; type = nothing, dims, op = +, init = nothing)
     _init = _resolve_init_type(op, type, init)
-    ParallelReduce{typeof(default_backend()), typeof(_init)}(;
+    ParallelReduce{typeof(default_backend()), typeof(_init), typeof(op)}(;
         dims = dims, op = op, init = _init)
 end
 
@@ -171,7 +171,7 @@ end
         dims::AllDims, x...; type = nothing, op = +,
         init = nothing) where {TBackend}
     _init = _resolve_init_type(op, type, init)
-    reducer = ParallelReduce{TBackend, typeof(_init)}(;
+    reducer = ParallelReduce{TBackend, typeof(_init), typeof(op)}(;
         dims = dims,
         op = op,
         init = _init,
