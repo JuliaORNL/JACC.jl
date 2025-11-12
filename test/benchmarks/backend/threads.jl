@@ -16,30 +16,38 @@ end
 push!(JACCBench.axpy_comps, axpy_threads)
 
 function dot_threads(SIZE::Integer, x, y)
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
-    Threads.@threads for i in 1:SIZE
-        tmp[Threads.threadid()] = tmp[Threads.threadid()] .+ x[i] * y[i]
+    tmp = zeros(eltype(x), Threads.nthreads())
+    nchunks = Threads.nthreads()
+    chunks = collect(Base.Iterators.partition(1:SIZE, cld(SIZE, nchunks)))
+    nchunks = length(chunks)
+    Threads.@threads :static for n in 1:nchunks
+        @inbounds begin
+            tp = tmp[n]
+            for i in chunks[n]
+                tp += x[i] * y[i]
+            end
+            tmp[n] = tp
+        end
     end
-    for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
-    end
-    return ret
+    return sum(tmp[1:nchunks])
 end
 
 function dot_threads((M, N)::NTuple{2, Integer}, x, y)
-    tmp = zeros(Threads.nthreads())
-    ret = zeros(1)
-    Threads.@threads for j in 1:N
-        for i in 1:M
-            tmp[Threads.threadid()] = tmp[Threads.threadid()] .+
-                                      x[i, j] * y[i, j]
+    tmp = zeros(eltype(x), Threads.nthreads())
+    nchunks = Threads.nthreads()
+    ids = CartesianIndices((1:M, 1:N))
+    chunks = collect(Base.Iterators.partition(ids, cld(length(ids), nchunks)))
+    nchunks = length(chunks)
+    Threads.@threads :static for n in 1:nchunks
+        @inbounds begin
+            tp = tmp[n]
+            for ij in chunks[n]
+                tp += x[ij] * y[ij]
+            end
+            tmp[n] = tp
         end
     end
-    for i in 1:Threads.nthreads()
-        ret = ret .+ tmp[i]
-    end
-    return ret
+    return sum(tmp[1:nchunks])
 end
 
 push!(JACCBench.dot_comps, dot_threads)

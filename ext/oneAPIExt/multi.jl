@@ -420,7 +420,7 @@ function JACC.Multi.parallel_reduce(
     for i in 1:ndev
         oneAPI.device!(i)
         dev_id = i
-        reducer = JACC.ParallelReduce{oneAPIBackend, Float64}(;
+        reducer = JACC.ParallelReduce{oneAPIBackend, Float64, typeof(+)}(;
             dims = N_multi, op = +, sync = false)
         reducer(f, process_param.((x), dev_id)...)
         rret[i] = reducer.workspace.ret
@@ -451,7 +451,7 @@ function JACC.Multi.parallel_reduce(
     for i in 1:ndev
         oneAPI.device!(i)
         dev_id = i
-        reducer = JACC.ParallelReduce{oneAPIBackend, Float64}(;
+        reducer = JACC.ParallelReduce{oneAPIBackend, Float64, typeof(+)}(;
             dims = (M, N_multi), op = +, sync = false)
         reducer(f, process_param.((x), dev_id)...)
         rret[i] = reducer.workspace.ret
