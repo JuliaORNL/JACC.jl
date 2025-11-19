@@ -40,7 +40,7 @@ end
 
 function JACC.Multi.parallel_for(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_for(f, ThreadsBackend(), (M,N), x...)
+    return JACC.parallel_for(f, ThreadsBackend(), (M, N), x...)
 end
 
 function JACC.Multi.parallel_reduce(
@@ -51,7 +51,7 @@ end
 
 function JACC.Multi.parallel_reduce(
         ::ThreadsBackend, (M, N)::NTuple{2, Integer}, f::Callable, x...)
-    return JACC.parallel_reduce(f, ThreadsBackend(), (M,N), x...; op = +,
+    return JACC.parallel_reduce(f, ThreadsBackend(), (M, N), x...; op = +,
         init = 0.0)
 end
 

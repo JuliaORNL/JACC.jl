@@ -118,7 +118,7 @@ end
             wk.tmp[n] = tp
         end
     end
-    wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    wk.ret[] = reduce(op, @view wk.tmp[1:nchunks])
     return nothing
 end
 
@@ -134,7 +134,7 @@ end
 
 @inline function JACC.parallel_reduce(
         f, ::ThreadsBackend, N::Integer, x...; op, init)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init), typeof(op)}(;
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
         dims = N, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
@@ -171,7 +171,7 @@ end
             wk.tmp[n] = tp
         end
     end
-    wk.ret[] = reduce(op, wk.tmp[1:nchunks])
+    wk.ret[] = reduce(op, @view wk.tmp[1:nchunks])
     return nothing
 end
 
@@ -188,8 +188,9 @@ end
 
 @inline function JACC.parallel_reduce(f, ::ThreadsBackend,
         (M, N)::NTuple{2, Integer}, x...; op, init)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init), typeof(op)}(;
-        dims = (M, N), op = op, init = init)
+    dims = (M, N)
+    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
+        dims = dims, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
