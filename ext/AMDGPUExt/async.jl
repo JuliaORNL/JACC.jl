@@ -63,7 +63,7 @@ end
 function JACC.Async.parallel_reduce(::AMDGPUBackend, id::Integer,
         dims::JACC.IDims, op::Callable, f::Callable, x...; init)
     set_relative_device!(id)
-    reducer = JACC.ParallelReduce{AMDGPUBackend, typeof(init), typeof(op)}(;
+    reducer = JACC.ParallelReduce{AMDGPUBackend, typeof(init)}(;
         dims = dims, op = op, init = init, sync = false)
     reducer(f, x...)
     ret = reducer.workspace.ret
