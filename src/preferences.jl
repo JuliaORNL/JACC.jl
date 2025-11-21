@@ -143,7 +143,7 @@ function set_default_backend(new_backend::AbstractString)
     @set_preferences!("default_backend"=>Preferences.Backend._DEFAULT[])
 
     @info """
-        New default backend set
+        New default backend set: \"$(new_backend_lc)\"
         Restart your Julia session for this change to take effect!
         """
 end
@@ -152,7 +152,15 @@ function set_default_backend(new_backend::Symbol)
     set_default_backend(String(new_backend))
 end
 
-set_backend(b::Union{Symbol, AbstractString}) = set_default_backend(b)
+function set_backend(b::AbstractString)
+    if Preferences.Backend._LIST[] == [b]
+        return
+    end
+    unset_backend()
+    set_default_backend(b)
+end
+
+set_backend(b::Symbol) = set_backend(String(b))
 
 function add_backend(new_backend::AbstractString)
     new_backend_lc = lowercase(new_backend)
@@ -172,7 +180,7 @@ function add_backend(new_backend::AbstractString)
     @set_preferences!("placement"=>Preferences.Backend._PLACE[])
 
     @info """
-        New backend added
+        Added \"$(new_backend_lc)\" backend
         Restart your Julia session for this change to take effect!
         """
 end
