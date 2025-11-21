@@ -74,8 +74,9 @@ const amdgpu = :amdgpu
 const oneapi = :oneapi
 end
 
-baremodule Preferences
-baremodule Backend
+module Preferences
+module Backend
+
 import Base: deepcopy, Dict
 import Preferences: @load_preference
 const default = @load_preference("default_backend", "threads")
@@ -83,6 +84,27 @@ const _DEFAULT = Ref(String(default))
 const list = @load_preference("backends", ["threads"])
 const _LIST = Ref(deepcopy(list))
 const _PLACE = Ref(@load_preference("placement", Dict{String, String}()))
+
+function backend_import(backend::String)
+    backend == "cuda" && return quote
+        import CUDA
+        @info "CUDA backend loaded"
+    end
+    backend == "amdgpu" && return quote
+        import AMDGPU
+        @info "AMDGPU backend loaded"
+    end
+    backend == "oneapi" && return quote
+        import oneAPI
+        @info "oneAPI backend loaded"
+    end
+    backend == "threads" && return quote
+        @info "Threads backend loaded with $(Threads.nthreads()) threads"
+    end
+end
+
+const imports = Expr(:block, backend_import.(list)...)
+
 end
 end
 
@@ -120,11 +142,8 @@ function set_default_backend(new_backend::AbstractString)
     Preferences.Backend._DEFAULT[] = new_backend_lc
     @set_preferences!("default_backend"=>Preferences.Backend._DEFAULT[])
 
-    # _check_install_backend(new_backend_lc)
-    # @set_preferences!("placement"=>Preferences.Backend._PLACE[])
-
     @info """
-        New default backend set
+        New default backend set: \"$(new_backend_lc)\"
         Restart your Julia session for this change to take effect!
         """
 end
@@ -133,7 +152,15 @@ function set_default_backend(new_backend::Symbol)
     set_default_backend(String(new_backend))
 end
 
-set_backend(b::Union{Symbol, AbstractString}) = set_default_backend(b)
+function set_backend(b::AbstractString)
+    if Preferences.Backend._LIST[] == [b]
+        return
+    end
+    unset_backend()
+    set_default_backend(b)
+end
+
+set_backend(b::Symbol) = set_backend(String(b))
 
 function add_backend(new_backend::AbstractString)
     new_backend_lc = lowercase(new_backend)
@@ -153,7 +180,7 @@ function add_backend(new_backend::AbstractString)
     @set_preferences!("placement"=>Preferences.Backend._PLACE[])
 
     @info """
-        New backend added
+        Added \"$(new_backend_lc)\" backend
         Restart your Julia session for this change to take effect!
         """
 end
@@ -189,50 +216,12 @@ function remove_backend(backend::Symbol)
     remove_backend(String(backend))
 end
 
-function _init_backends()
-    quote
-        for backend in JACC.Preferences.Backend.list
-            if backend == "cuda"
-                import CUDA
-                @info "CUDA backend loaded"
-
-            elseif backend == "amdgpu"
-                import AMDGPU
-                @info "AMDGPU backend loaded"
-
-            elseif backend == "oneapi"
-                import oneAPI
-                @info "oneAPI backend loaded"
-
-            elseif backend == "threads"
-                @info "Threads backend loaded with $(Threads.nthreads()) threads"
-            end
-        end
-    end
-end
-
 macro init_backends()
-    return esc(_init_backends())
+    return JACC.Preferences.Backend.imports
 end
 
 function _init_backend()
-    quote
-        if JACC.Preferences.Backend.default == "cuda"
-            import CUDA
-            @info "CUDA backend loaded"
-
-        elseif JACC.Preferences.Backend.default == "amdgpu"
-            import AMDGPU
-            @info "AMDGPU backend loaded"
-
-        elseif JACC.Preferences.Backend.default == "oneapi"
-            import oneAPI
-            @info "oneAPI backend loaded"
-
-        elseif JACC.Preferences.Backend.default == "threads"
-            @info "Threads backend loaded with $(Threads.nthreads()) threads"
-        end
-    end
+    JACC.Preferences.Backend.backend_import(JACC.Preferences.Backend.default)
 end
 
 macro init_backend()
