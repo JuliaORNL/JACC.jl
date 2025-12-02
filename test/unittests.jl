@@ -1,43 +1,6 @@
 import LinearAlgebra
 using ..JACCTestCommon: axpy, dot, seq_axpy, seq_dot
 
-@testset "VectorAddLambda" begin
-    function f(i, a)
-        @inbounds a[i] += 5.0
-    end
-
-    alpha = 2.5
-
-    N = 10
-    dims = (N)
-    a = round.(rand(Float32, dims) * 100)
-    a_expected = a .+ 5.0
-
-    a_device = JACC.to_device(a)
-    JACC.parallel_for(N, f, a_device)
-
-    @test JACC.to_host(a_device)≈a_expected rtol=1e-5
-end
-
-@testset "AXPY" begin
-    alpha = 2.5
-
-    N = 10
-    # Generate random vectors x and y of length N for the interval [0, 100]
-    x = round.(rand(Float32, N) * 100)
-    y = round.(rand(Float32, N) * 100)
-    alpha = 2.5
-
-    x_device = JACC.to_device(x)
-    y_device = JACC.to_device(y)
-    JACC.parallel_for(N, axpy, alpha, x_device, y_device)
-
-    x_expected = x
-    seq_axpy(N, alpha, x_expected, y)
-
-    @test JACC.to_host(x_device)≈x_expected rtol=1e-1
-end
-
 @testset "array" begin
     # zeros
     N = 10
@@ -92,6 +55,43 @@ end
     @test ndims(x) == 3
     @test eltype(x) == Complex{Float32}
     @test size(x) == (5, 5, 5)
+end
+
+@testset "VectorAddLambda" begin
+    function f(i, a)
+        @inbounds a[i] += 5.0
+    end
+
+    alpha = 2.5
+
+    N = 10
+    dims = (N)
+    a = round.(rand(Float32, dims) * 100)
+    a_expected = a .+ 5.0
+
+    a_device = JACC.to_device(a)
+    JACC.parallel_for(N, f, a_device)
+
+    @test JACC.to_host(a_device)≈a_expected rtol=1e-5
+end
+
+@testset "AXPY" begin
+    alpha = 2.5
+
+    N = 10
+    # Generate random vectors x and y of length N for the interval [0, 100]
+    x = round.(rand(Float32, N) * 100)
+    y = round.(rand(Float32, N) * 100)
+    alpha = 2.5
+
+    x_device = JACC.to_device(x)
+    y_device = JACC.to_device(y)
+    JACC.parallel_for(N, axpy, alpha, x_device, y_device)
+
+    x_expected = x
+    seq_axpy(N, alpha, x_expected, y)
+
+    @test JACC.to_host(x_device)≈x_expected rtol=1e-1
 end
 
 # using Cthulhu
