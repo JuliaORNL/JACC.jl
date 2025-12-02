@@ -12,7 +12,9 @@ JACC.get_backend(::Val{:cuda}) = CUDABackend()
 
 default_stream() = CUDA.stream()
 
-JACC.default_stream(::Type{CUDABackend}) = default_stream()
+JACC.default_stream(::CUDABackend) = default_stream()
+
+JACC.create_stream(::CUDABackend) = CUDA.CuStream()
 
 function JACC.synchronize(::CUDABackend; stream = default_stream())
     CUDA.synchronize(stream)

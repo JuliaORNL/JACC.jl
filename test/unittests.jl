@@ -13,7 +13,7 @@ using ..JACCTestCommon: axpy, dot, seq_axpy, seq_dot
     a = round.(rand(Float32, dims) * 100)
     a_expected = a .+ 5.0
 
-    a_device = JACC.array(a)
+    a_device = JACC.to_device(a)
     JACC.parallel_for(N, f, a_device)
 
     @test JACC.to_host(a_device)≈a_expected rtol=1e-5
@@ -28,8 +28,8 @@ end
     y = round.(rand(Float32, N) * 100)
     alpha = 2.5
 
-    x_device = JACC.array(x)
-    y_device = JACC.array(y)
+    x_device = JACC.to_device(x)
+    y_device = JACC.to_device(y)
     JACC.parallel_for(N, axpy, alpha, x_device, y_device)
 
     x_expected = x
@@ -85,9 +85,9 @@ end
     # Generate random vectors x and y of length N for the interval [0, 100]
     alpha = 2.5
 
-    x = JACC.array(round.(rand(Float32, N) * 100))
-    y = JACC.array(round.(rand(Float32, N) * 100))
-    counter = JACC.array(Int32[0])
+    x = JACC.to_device(round.(rand(Float32, N) * 100))
+    y = JACC.to_device(round.(rand(Float32, N) * 100))
+    counter = JACC.to_device(Int32[0])
     JACC.parallel_for(N, axpy_counter!, alpha, x, y, counter)
 
     @test JACC.to_host(counter)[1] == N
@@ -107,7 +107,7 @@ end
 end
 
 @testset "reduce" begin
-    a = JACC.array([1 for i in 1:10])
+    a = JACC.to_device([1 for i in 1:10])
     @test JACC.parallel_reduce(a) == 10
     @test JACC.parallel_reduce(min, a) == 1
     reducer = JACC.reducer(; type = eltype(a), dims = JACC.array_size(a), op = +)
@@ -125,7 +125,7 @@ end
 
     SIZE = 1000
     ah = randn(FloatType, SIZE)
-    ad = JACC.array(ah)
+    ad = JACC.to_device(ah)
     mxd = JACC.parallel_reduce(SIZE, (i, a) -> a[i], ad; op = max, init = -Inf)
     @test mxd == maximum(ah)
     mxd = JACC.parallel_reduce(max, ad)
@@ -136,7 +136,7 @@ end
     @test mnd == minimum(ah)
 
     ah2 = randn(FloatType, (SIZE, SIZE))
-    ad2 = JACC.array(ah2)
+    ad2 = JACC.to_device(ah2)
     mxd = JACC.parallel_reduce(
         (SIZE, SIZE), (i, j, a) -> a[i, j], ad2; op = max, init = -Inf)
     @test mxd == maximum(ah2)
@@ -152,8 +152,8 @@ end
     x = round.(rand(Float64, SIZE, SIZE) * 100)
     y = round.(rand(Float64, SIZE, SIZE) * 100)
     alpha = 2.5
-    dx = JACC.array(x)
-    dy = JACC.array(y)
+    dx = JACC.to_device(x)
+    dy = JACC.to_device(y)
     res = JACC.parallel_reduce((SIZE, SIZE), dot, dx, dy)
     @test res≈seq_dot(SIZE, SIZE, x, y) rtol=1e-1
 end
@@ -162,7 +162,7 @@ end
     for N in 3:7
         dims = ntuple(_->3, N)
         ah = randn(FloatType, dims)
-        ad = JACC.array(ah)
+        ad = JACC.to_device(ah)
         reducer = JACC.reducer(FloatType, dims)
         reducer(ad)
         @test JACC.get_result(reducer) ≈ sum(ah)
@@ -195,7 +195,7 @@ end
     dims = (N)
     a = round.(rand(Float32, dims) * 100)
     a_expected = a .+ 5.0
-    a_device = JACC.array(a)
+    a_device = JACC.to_device(a)
     JACC.parallel_for(JACC.launch_spec(; threads = 1000), N, a_device) do i, a
         @inbounds a[i] += 5.0
     end
@@ -486,13 +486,13 @@ end
     a = round.(rand(Float32, N) * 100)
     a_expected = a .+ 5.0
 
-    a_device = JACC.array(a)
+    a_device = JACC.to_device(a)
     JACC.parallel_for(N, a_device) do i, a
         @inbounds a[i] += 5.0
     end
     @test JACC.to_host(a_device)≈a_expected rtol=1e-5
 
-    a_device = JACC.array(a)
+    a_device = JACC.to_device(a)
     res = JACC.parallel_reduce(N, a_device) do i, a
         a[i] * a[i]
     end
@@ -539,7 +539,7 @@ end
     N = 100
     a = round.(rand(Float32, N) * 100)
     a_expected = a .+ 5.0
-    a_device = JACC.array(a)
+    a_device = JACC.to_device(a)
     JACC.parallel_for(JACC.launch_spec(; threads = 1000), N, a_device) do i, a
         @inbounds a[i] += 5.0
     end
@@ -727,12 +727,12 @@ end
     w = ones(9)
     t = 1.0
 
-    df = JACC.array(f)
-    df1 = JACC.array(f1)
-    df2 = JACC.array(f2)
-    dcx = JACC.array(cx)
-    dcy = JACC.array(cy)
-    dw = JACC.array(w)
+    df = JACC.to_device(f)
+    df1 = JACC.to_device(f1)
+    df2 = JACC.to_device(f2)
+    dcx = JACC.to_device(cx)
+    dcy = JACC.to_device(cy)
+    dw = JACC.to_device(w)
 
     JACC.parallel_for(
         (SIZE, SIZE), lbm_kernel, df, df1, df2, t, dw, dcx, dcy, SIZE)
