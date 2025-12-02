@@ -38,7 +38,8 @@ end
     @test JACC.to_host(x_device)≈x_expected rtol=1e-1
 end
 
-@testset "zeros" begin
+@testset "array" begin
+    # zeros
     N = 10
     x = JACC.zeros(N)
     @test eltype(x) == FloatType
@@ -50,9 +51,8 @@ end
 
     JACC.parallel_for(N, add_one, x)
     @test ones(N)≈JACC.to_host(x) rtol=1e-5
-end
 
-@testset "ones" begin
+    # ones
     N = 10
     x = JACC.ones(N)
     @test eltype(x) == FloatType
@@ -64,14 +64,34 @@ end
 
     JACC.parallel_for(N, minus_one, x)
     @test zeros(N)≈JACC.to_host(x) rtol=1e-5
-end
 
-@testset "fill" begin
+    # fill
     N = 10
     x = JACC.fill(10.0, N)
     @test fill(10.0, N)≈JACC.to_host(x) rtol=1e-5
     fill!(x, 22.2)
     @test fill(22.2, N)≈JACC.to_host(x) rtol=1e-5
+
+    # array
+    x = JACC.array(10)
+    @test ndims(x) == 1
+    @test length(x) == 10
+    @test eltype(x) == JACC.default_float()
+    x = JACC.array(Float32, 10)
+    @test size(x) == (10,)
+    @test eltype(x) == Float32
+    a = JACC.array(5, 4)
+    b = JACC.array((5, 4))
+    @test ndims(a) == 2
+    @test size(a) == size(b)
+    @test eltype(a) == JACC.default_float()
+    x = JACC.array(; type = Int, dims = 10)
+    @test eltype(x) == Int
+    @test ndims(x) == 1
+    x = JACC.array(; type = Complex{Float32}, dims = (5, 5, 5))
+    @test ndims(x) == 3
+    @test eltype(x) == Complex{Float32}
+    @test size(x) == (5, 5, 5)
 end
 
 # using Cthulhu
@@ -877,7 +897,7 @@ if JACC.backend != "amdgpu"
         copyto!(r, r_old)
 
         JACC.Async.parallel_for(1, SIZE, matvecmul, a0, a1, a2, p, s1, SIZE)
-        
+
         alpha1 = JACC.Async.parallel_reduce(1, SIZE, dot, p, s1)
         alpha0 = JACC.Async.parallel_reduce(2, SIZE, dot, r, r)
         JACC.Async.synchronize()
@@ -889,7 +909,7 @@ if JACC.backend != "amdgpu"
         JACC.Async.parallel_for(1, SIZE, axpy, alpha, x, p)
         JACC.Async.parallel_for(2, SIZE, axpy, negative_alpha, r, s2)
         JACC.Async.synchronize()
-        
+
         beta1 = JACC.Async.parallel_reduce(1, SIZE, dot, r_old, r_old)
         beta0 = JACC.Async.parallel_reduce(2, SIZE, dot, r, r)
         JACC.Async.synchronize()
@@ -901,7 +921,7 @@ if JACC.backend != "amdgpu"
         ccond = JACC.Async.parallel_reduce(2, SIZE, dot, r, r)
         JACC.Async.synchronize()
         cond = JACC.to_host(ccond)[]
-  
+
         copyto!(p, r_aux)
     end
     @test cond[1, 1] <= 1e-14
