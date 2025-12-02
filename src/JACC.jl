@@ -29,10 +29,12 @@ export synchronize
 
 ilog2(n::T) where {T <: Integer} = sizeof(T) * 8 - 1 - leading_zeros(n)
 
-function default_stream end
+default_stream() = default_stream(default_backend())
+
+create_stream() = create_stream(default_backend())
 
 @kwdef mutable struct LaunchSpec{Backend}
-    stream = default_stream(Backend)
+    stream = default_stream(Backend())
     threads = 0
     blocks = 0
     shmem_size::Int = -1
@@ -51,6 +53,7 @@ array_type() = array_type(default_backend())
 
 array(x::AbstractArray) = array(default_backend(), x)
 
+to_device(x::AbstractArray) = convert(array_type(), x)
 to_host(x::AbstractArray) = convert(Base.Array, x)
 
 default_float() = default_float(default_backend())
@@ -106,7 +109,7 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
     dims::Dim = zeros(Int, Dim)
     op::Op = () -> nothing
     init::T = default_init(T, op)
-    stream = default_stream(Backend)
+    stream = default_stream(Backend())
     sync::Bool = true
     workspace::ReduceWorkspace = reduce_workspace(Backend(), init)
 end

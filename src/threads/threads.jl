@@ -28,7 +28,9 @@ include("experimental/experimental.jl")
 
 JACC.synchronize(::ThreadsBackend) = nothing
 
-JACC.default_stream(::Type{ThreadsBackend}) = nothing
+JACC.default_stream(::ThreadsBackend) = nothing
+
+JACC.create_stream(::ThreadsBackend) = nothing
 
 @inline function JACC.parallel_for(f, ::ThreadsBackend, N::Integer, x...)
     @maybe_threaded for i in 1:N

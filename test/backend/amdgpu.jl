@@ -41,3 +41,16 @@ end
     y3 = JACC.fill(10, (N, N, N))
     @test typeof(y3) == AMDGPU.ROCArray{Int, 3, AMDGPU.Runtime.Mem.HIPBuffer}
 end
+
+@testset "stream" begin
+    using AMDGPU
+    sd1 = JACC.default_stream()
+    @test typeof(sd1) == HIPStream
+    sd2 = JACC.default_stream()
+    @test sd2 === sd1
+    s1 = JACC.create_stream()
+    @test typeof(s1) == HIPStream
+    @test s1 != sd1
+    s2 = JACC.create_stream()
+    @test s2 != s1
+end

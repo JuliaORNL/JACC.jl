@@ -11,7 +11,9 @@ JACC.get_backend(::Val{:oneapi}) = oneAPIBackend()
 
 default_stream() = oneAPI.global_queue(oneAPI.context(), oneAPI.device())
 
-JACC.default_stream(::Type{oneAPIBackend}) = default_stream()
+JACC.default_stream(::oneAPIBackend) = default_stream()
+
+JACC.create_stream(::oneAPIBackend) = oneAPI.oneL0.ZeCommandQueue(oneAPI.context(), oneAPI.device())
 
 function JACC.synchronize(::oneAPIBackend; stream = default_stream())
     oneAPI.synchronize(stream)

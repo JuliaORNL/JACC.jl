@@ -14,7 +14,9 @@ JACC.get_backend(::Val{:amdgpu}) = AMDGPUBackend()
 
 default_stream() = AMDGPU.stream()
 
-JACC.default_stream(::Type{AMDGPUBackend}) = default_stream()
+JACC.default_stream(::AMDGPUBackend) = default_stream()
+
+JACC.create_stream(::AMDGPUBackend) = AMDGPU.HIPStream()
 
 function JACC.synchronize(::AMDGPUBackend; stream = default_stream())
     AMDGPU.synchronize(stream)
