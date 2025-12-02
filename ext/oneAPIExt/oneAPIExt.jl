@@ -63,17 +63,7 @@ function (blkIter::BlockIndexerSwapped)()
     return (i, j)
 end
 
-function JACC.parallel_for(
-        f, ::oneAPIBackend, (M, N)::NTuple{2, Integer}, x...)
-    dev = oneAPI.device()
-    props = oneAPI.compute_properties(dev)
-    maxBlocks = (x = props.maxGroupCountX, y = props.maxGroupCountY)
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
-    if M < N && maxBlocks.x > maxBlocks.y
-        m, n = (N, M)
-    end
-
+function _parallel_for(indexer::TI, f, (m, n), (M, N), x...) where {TI}
     kernel = @oneapi launch=false _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
     maxThreads = div(oneAPI.launch_configuration(kernel), 2)
     maxThreadsX = sqrt(maxThreads)
@@ -87,20 +77,22 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        f, spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, x...)
+        f, ::oneAPIBackend, (M, N)::NTuple{2, Integer}, x...)
     dev = oneAPI.device()
     props = oneAPI.compute_properties(dev)
     maxBlocks = (x = props.maxGroupCountX, y = props.maxGroupCountY)
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, (M, N), (M, N), x...)
+    end
+end
 
+function _parallel_for(indexer::TI, f, spec::LaunchSpec{oneAPIBackend}, (m, n),
+        (M, N), x...) where {TI}
     kernel = @oneapi launch=false _parallel_for_oneapi_MN(indexer, (M, N), f, x...)
 
     if spec.threads == 0
-        if M < N && maxBlocks.x > maxBlocks.y
-            indexer = BlockIndexerSwapped()
-            m, n = (N, M)
-        end
         maxThreads = oneAPI.launch_configuration(kernel)
         maxThreadsX = sqrt(maxThreads)
         y_thr = floor(Int, (n / m) * maxThreadsX)
@@ -116,6 +108,18 @@ function JACC.parallel_for(
         queue = spec.stream)
     if spec.sync
         oneAPI.synchronize(spec.stream)
+    end
+end
+
+function JACC.parallel_for(
+        f, spec::LaunchSpec{oneAPIBackend}, (M, N)::NTuple{2, Integer}, x...)
+    dev = oneAPI.device()
+    props = oneAPI.compute_properties(dev)
+    maxBlocks = (x = props.maxGroupCountX, y = props.maxGroupCountY)
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, spec, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, spec, (M, N), (M, N), x...)
     end
 end
 
