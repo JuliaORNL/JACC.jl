@@ -64,7 +64,7 @@ abstract type BlockIndexer2D end
 
 struct BlockIndexerBasic <: BlockIndexer2D end
 
-function (blkIter::BlockIndexerBasic)(blockIdx, blockDim, threadIdx)
+function (blkIter::BlockIndexerBasic)()
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     return (i, j)
@@ -72,25 +72,13 @@ end
 
 struct BlockIndexerSwapped <: BlockIndexer2D end
 
-function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
+function (blkIter::BlockIndexerSwapped)()
     j = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     i = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     return (i, j)
 end
 
-function JACC.parallel_for(f, ::CUDABackend, (M, N)::NTuple{2, Integer}, x...)
-    dev = CUDA.device()
-    maxBlocks = (
-        x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
-        y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y)
-    )
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
-    if M < N && maxBlocks.x > maxBlocks.y
-        indexer = BlockIndexerSwapped()
-        m, n = (N, M)
-    end
-
+function _parallel_for(indexer::TI, f, (m, n), (M, N), x...) where {TI}
     kargs = kernel_args(indexer, (M, N), f, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda_MN, kargs)
     maxThreadsX = sqrt(maxThreads)
@@ -105,24 +93,25 @@ function JACC.parallel_for(f, ::CUDABackend, (M, N)::NTuple{2, Integer}, x...)
         kargs...; threads = threads, blocks = blocks, shmem = shmem_size)
 end
 
-function JACC.parallel_for(
-        f, spec::LaunchSpec{CUDABackend}, (M, N)::NTuple{2, Integer}, x...)
+function JACC.parallel_for(f, ::CUDABackend, (M, N)::NTuple{2, Integer}, x...)
     dev = CUDA.device()
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
+    maxBlocks = (
+        x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
+        y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y)
+    )
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, (M, N), (M, N), x...)
+    end
+end
 
+function _parallel_for(indexer::TI, f, spec::LaunchSpec{CUDABackend}, (m, n),
+        (M, N), x...) where {TI}
     kargs = kernel_args(indexer, (M, N), f, x...)
     kernel, maxThreads = kernel_maxthreads(_parallel_for_cuda_MN, kargs)
 
     if spec.threads == 0
-        maxBlocks = (
-            x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
-            y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y)
-        )
-        if M < N && maxBlocks.x > maxBlocks.y
-            indexer = BlockIndexerSwapped()
-            m, n = (N, M)
-        end
         maxThreadsX = sqrt(maxThreads)
         y_thr = floor(Int, (n / m) * maxThreadsX)
         x_thr = fld(maxThreads, y_thr)
@@ -141,6 +130,20 @@ function JACC.parallel_for(
         shmem = spec.shmem_size, stream = spec.stream)
     if spec.sync
         CUDA.synchronize(spec.stream)
+    end
+end
+
+function JACC.parallel_for(
+        f, spec::LaunchSpec{CUDABackend}, (M, N)::NTuple{2, Integer}, x...)
+    dev = CUDA.device()
+    maxBlocks = (
+        x = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X),
+        y = attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y)
+    )
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, spec, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, spec, (M, N), (M, N), x...)
     end
 end
 
@@ -334,7 +337,7 @@ end
 end
 
 @inline function _parallel_for_cuda_MN(indexer::BlockIndexer2D, (M, N), f, x...)
-    i, j = indexer(blockIdx, blockDim, threadIdx)
+    i, j = indexer()
     i > M && return nothing
     j > N && return nothing
     @inline f(i, j, x...)
