@@ -62,32 +62,21 @@ abstract type BlockIndexer2D end
 
 struct BlockIndexerBasic <: BlockIndexer2D end
 
-function (blkIter::BlockIndexerBasic)(blockIdx, blockDim, threadIdx)
-    j = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    i = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+function (blkIter::BlockIndexerBasic)()
+    i = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
+    j = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     return (i, j)
 end
 
 struct BlockIndexerSwapped <: BlockIndexer2D end
 
-function (blkIter::BlockIndexerSwapped)(blockIdx, blockDim, threadIdx)
+function (blkIter::BlockIndexerSwapped)()
     j = (workgroupIdx().x - 1) * workgroupDim().x + workitemIdx().x
     i = (workgroupIdx().y - 1) * workgroupDim().y + workitemIdx().y
     return (i, j)
 end
 
-function JACC.parallel_for(
-        f, ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, x...)
-    dev = AMDGPU.device()
-    props = AMDGPU.HIP.properties(dev)
-    maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
-    if M < N && maxBlocks.x > maxBlocks.y
-        indexer = BlockIndexerSwapped()
-        m, n = (N, M)
-    end
-
+function _parallel_for(indexer::TI, f, (m, n), (M, N), x...) where {TI}
     kernel = @roc launch=false _parallel_for_amdgpu_MN(indexer, (M, N), f, x...)
     config = AMDGPU.launch_configuration(kernel)
     maxThreads = config.groupsize
@@ -104,21 +93,23 @@ function JACC.parallel_for(
 end
 
 function JACC.parallel_for(
-        f, spec::LaunchSpec{AMDGPUBackend}, (M, N)::NTuple{2, Integer}, x...)
+        f, ::AMDGPUBackend, (M, N)::NTuple{2, Integer}, x...)
     dev = AMDGPU.device()
     props = AMDGPU.HIP.properties(dev)
-    indexer = BlockIndexerBasic()
-    m, n = (M, N)
+    maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, (M, N), (M, N), x...)
+    end
+end
 
+function _parallel_for(indexer::TI, f, spec::LaunchSpec{AMDGPUBackend}, (m, n),
+        (M, N), x...) where {TI}
     kernel = @roc launch=false _parallel_for_amdgpu_MN(indexer, (M, N), f, x...)
     config = AMDGPU.launch_configuration(kernel)
 
     if spec.threads == 0
-        maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
-        if M < N && maxBlocks.x > maxBlocks.y
-            indexer = BlockIndexerSwapped()
-            m, n = (N, M)
-        end
         maxThreads = config.groupsize
         maxThreadsX = sqrt(maxThreads)
         y_thr = floor(Int, (n / m) * maxThreadsX)
@@ -139,6 +130,19 @@ function JACC.parallel_for(
     if spec.sync
         AMDGPU.synchronize(spec.stream)
     end
+end
+
+function JACC.parallel_for(
+        f, spec::LaunchSpec{AMDGPUBackend}, (M, N)::NTuple{2, Integer}, x...)
+    dev = AMDGPU.device()
+    props = AMDGPU.HIP.properties(dev)
+    maxBlocks = (x = props.maxGridSize[1], y = props.maxGridSize[2])
+    if M < N && maxBlocks.x > maxBlocks.y
+        _parallel_for(BlockIndexerSwapped(), f, spec, (N, M), (M, N), x...)
+    else
+        _parallel_for(BlockIndexerBasic(), f, spec, (M, N), (M, N), x...)
+    end
+
 end
 
 function JACC.parallel_for(
@@ -350,7 +354,7 @@ end
 end
 
 @inline function _parallel_for_amdgpu_MN(indexer::BlockIndexer2D, (M, N), f, x...)
-    i, j = indexer(workgroupIdx, workgroupDim, workitemIdx)
+    i, j = indexer()
     i > M && return nothing
     j > N && return nothing
     @inline f(i, j, x...)
