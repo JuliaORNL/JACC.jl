@@ -4,42 +4,56 @@ import AMDGPU
     @test JACC.backend == "amdgpu"
 end
 
-@testset "zeros_type" begin
+@testset "array_types" begin
+    using AMDGPU
+    import AMDGPU.Runtime.Mem.HIPBuffer
     N = 10
+
+    # zeros
     x = JACC.zeros(Float64, N)
-    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, HIPBuffer}
     @test eltype(x) == Float64
     x = JACC.zeros(Int32, N)
-    @test typeof(x) == AMDGPU.ROCArray{Int32, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x) == AMDGPU.ROCArray{Int32, 1, HIPBuffer}
     @test eltype(x) == Int32
-end
 
-@testset "ones_type" begin
-    N = 10
+    # ones
     x = JACC.ones(Float64, N)
-    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, HIPBuffer}
     @test eltype(x) == Float64
     x = JACC.ones(Int32, N)
-    @test typeof(x) == AMDGPU.ROCArray{Int32, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x) == AMDGPU.ROCArray{Int32, 1, HIPBuffer}
     @test eltype(x) == Int32
-end
 
-@testset "fill_type" begin
-    N = 10
+    # fill
     x = JACC.fill(10.0, N)
-    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(x) == AMDGPU.ROCArray{Float64, 1, HIPBuffer}
     y = JACC.fill(10, (N,))
-    @test typeof(y) == AMDGPU.ROCArray{Int, 1, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(y) == AMDGPU.ROCArray{Int, 1, HIPBuffer}
     x2 = JACC.fill(10.0, N, N)
     @test typeof(x2) ==
-          AMDGPU.ROCArray{Float64, 2, AMDGPU.Runtime.Mem.HIPBuffer}
+          AMDGPU.ROCArray{Float64, 2, HIPBuffer}
     y2 = JACC.fill(10, (N, N))
-    @test typeof(y2) == AMDGPU.ROCArray{Int, 2, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(y2) == AMDGPU.ROCArray{Int, 2, HIPBuffer}
     x3 = JACC.fill(10.0, N, N, N)
     @test typeof(x3) ==
-          AMDGPU.ROCArray{Float64, 3, AMDGPU.Runtime.Mem.HIPBuffer}
+          AMDGPU.ROCArray{Float64, 3, HIPBuffer}
     y3 = JACC.fill(10, (N, N, N))
-    @test typeof(y3) == AMDGPU.ROCArray{Int, 3, AMDGPU.Runtime.Mem.HIPBuffer}
+    @test typeof(y3) == AMDGPU.ROCArray{Int, 3, HIPBuffer}
+
+    # array
+    x = JACC.array(N)
+    @test typeof(x) == ROCVector{Float64, HIPBuffer}
+    x = JACC.array(Float32, N)
+    @test typeof(x) == ROCVector{Float32, HIPBuffer}
+    a = JACC.array(5, 4)
+    b = JACC.array((5, 4))
+    @test typeof(a) == ROCMatrix{Float64, HIPBuffer}
+    @test typeof(b) == ROCMatrix{Float64, HIPBuffer}
+    x = JACC.array(; type = Int, dims = 10)
+    @test typeof(x) == ROCVector{Int, HIPBuffer}
+    x = JACC.array(; type = Complex{Float32}, dims = (5, 5, 5))
+    @test typeof(x) == ROCArray{Complex{Float32}, 3, HIPBuffer}
 end
 
 @testset "stream" begin

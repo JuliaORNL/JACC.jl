@@ -4,42 +4,54 @@ import oneAPI
     @test JACC.backend == "oneapi"
 end
 
-@testset "zeros_type" begin
-    using oneAPI, oneAPI.oneL0
+@testset "array_types" begin
+    using oneAPI
+    import oneAPI.oneL0: DeviceBuffer
     N = 10
+
+    #zeros
     x = JACC.zeros(N)
-    @test typeof(x) == oneVector{FloatType, oneL0.DeviceBuffer}
+    @test typeof(x) == oneVector{FloatType, DeviceBuffer}
     @test eltype(x) == FloatType
     y = JACC.zeros(Int32, N)
-    @test typeof(y) == oneVector{Int32, oneL0.DeviceBuffer}
+    @test typeof(y) == oneVector{Int32, DeviceBuffer}
     @test eltype(y) == Int32
-end
 
-@testset "ones_type" begin
-    using oneAPI, oneAPI.oneL0
-    N = 10
+    # ones
     x = JACC.ones(N)
-    @test typeof(x) == oneVector{FloatType, oneL0.DeviceBuffer}
+    @test typeof(x) == oneVector{FloatType, DeviceBuffer}
     @test eltype(x) == FloatType
     y = JACC.ones(Int32, N)
-    @test typeof(y) == oneVector{Int32, oneL0.DeviceBuffer}
+    @test typeof(y) == oneVector{Int32, DeviceBuffer}
     @test eltype(y) == Int32
-end
 
-@testset "fill_type" begin
-    N = 10
+    # fill
     x = JACC.fill(10.0, N)
-    @test typeof(x) == oneVector{Float64, oneL0.DeviceBuffer}
+    @test typeof(x) == oneVector{Float64, DeviceBuffer}
     y = JACC.fill(10, (N,))
-    @test typeof(y) == oneVector{Int, oneL0.DeviceBuffer}
+    @test typeof(y) == oneVector{Int, DeviceBuffer}
     x2 = JACC.fill(10.0, N, N)
-    @test typeof(x2) == oneMatrix{Float64, oneL0.DeviceBuffer}
+    @test typeof(x2) == oneMatrix{Float64, DeviceBuffer}
     y2 = JACC.fill(10, (N, N))
-    @test typeof(y2) == oneMatrix{Int, oneL0.DeviceBuffer}
+    @test typeof(y2) == oneMatrix{Int, DeviceBuffer}
     x3 = JACC.fill(10.0, N, N, N)
-    @test typeof(x3) == oneArray{Float64, 3, oneL0.DeviceBuffer}
+    @test typeof(x3) == oneArray{Float64, 3, DeviceBuffer}
     y3 = JACC.fill(10, (N, N, N))
-    @test typeof(y3) == oneArray{Int, 3, oneL0.DeviceBuffer}
+    @test typeof(y3) == oneArray{Int, 3, DeviceBuffer}
+
+    # array
+    x = JACC.array(N)
+    @test typeof(x) == oneVector{Float64, DeviceBuffer}
+    x = JACC.array(Float32, N)
+    @test typeof(x) == oneVector{Float32, DeviceBuffer}
+    a = JACC.array(5, 4)
+    b = JACC.array((5, 4))
+    @test typeof(a) == oneMatrix{Float64, DeviceBuffer}
+    @test typeof(b) == oneMatrix{Float64, DeviceBuffer}
+    x = JACC.array(; type = Int, dims = 10)
+    @test typeof(x) == oneVector{Int, DeviceBuffer}
+    x = JACC.array(; type = Complex{Float32}, dims = (5, 5, 5))
+    @test typeof(x) == oneArray{Complex{Float32}, 3, DeviceBuffer}
 end
 
 @testset "stream" begin
