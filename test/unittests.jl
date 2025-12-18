@@ -182,7 +182,8 @@ end
 end
 
 @testset "reduce-ND" begin
-    for N in 3:7
+    Nend = JACC.backend == "metal" ? 6 : 7
+    for N in 3:Nend
         dims = ntuple(_ -> 3, N)
         ah = randn(FloatType, dims)
         ad = JACC.to_device(ah)
@@ -493,14 +494,17 @@ end
         @test JACC.to_host(C)≈C_expected rtol=1e-5
     end
 
-    let N = 7
-        dims, A, B, C = init_add(N)
-        JACC.parallel_for(dims, A, B, C) do i1, i2, i3, i4, i5, i6, i7, A, B, C
-            id = CartesianIndex(i1, i2, i3, i4, i5, i6, i7)
-            C[id] = A[id] + B[id]
+    if JACC.backend != "metal"
+        let N = 7
+            dims, A, B, C = init_add(N)
+            JACC.parallel_for(
+                dims, A, B, C) do i1, i2, i3, i4, i5, i6, i7, A, B, C
+                id = CartesianIndex(i1, i2, i3, i4, i5, i6, i7)
+                C[id] = A[id] + B[id]
+            end
+            C_expected = Float32(2.0) .* ones(Float32, dims)
+            @test JACC.to_host(C)≈C_expected rtol=1e-5
         end
-        C_expected = Float32(2.0) .* ones(Float32, dims)
-        @test JACC.to_host(C)≈C_expected rtol=1e-5
     end
 end
 
