@@ -1,6 +1,5 @@
 module MetalExt
 
-import Base: Callable
 using JACC, Metal
 
 # overloaded array functions
