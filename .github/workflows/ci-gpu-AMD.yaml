@@ -91,7 +91,7 @@ jobs:
         uses: geekdude/github-status-action-v2@v1.1.10
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
-          context: "ci-GPU-AMD ${{matrix.jobname}}"
+          context: "ci-gpu-AMD ${{matrix.jobname}}"
           state: ${{job.status}}
           sha: ${{fromJson(steps.request.outputs.data).head.sha}}
           target_url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
