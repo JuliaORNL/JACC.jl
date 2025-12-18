@@ -107,8 +107,10 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
     workspace::ReduceWorkspace = reduce_workspace(Backend(), init)
 end
 
-@inline function ParallelReduce{Backend, T}(; dims, op, kw...) where {Backend, T}
-    ParallelReduce{Backend, T, typeof(op), typeof(dims)}(; dims = dims, op = op, kw...)
+@inline function ParallelReduce{Backend, T}(;
+        dims, op, kw...) where {Backend, T}
+    ParallelReduce{Backend, T, typeof(op), typeof(dims)}(;
+        dims = dims, op = op, kw...)
 end
 
 @inline function reducer(; type = nothing, dims, op = +, init = nothing)
