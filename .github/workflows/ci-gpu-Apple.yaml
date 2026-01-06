@@ -11,7 +11,7 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
-    runs-on: [self-hosted, X64, macOS, macminim1]
+    runs-on: [self-hosted, ARM64, macOS, macminim1]
 
     env:
       GH_JOBNAME: ${{matrix.jobname}}
