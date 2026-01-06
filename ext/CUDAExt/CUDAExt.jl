@@ -468,13 +468,13 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
 end
 
 function JACC.shared(::CUDABackend, x::AbstractArray)
-    size = length(x)
-    shmem = CuDynamicSharedArray(eltype(x), size)
+    len = length(x)
+    shmem = CuDynamicSharedArray(eltype(x), size(x))
     num_threads = blockDim().x * blockDim().y
-    if (size <= num_threads)
+    if (len <= num_threads)
         if blockDim().y == 1
             ind = threadIdx().x
-            #if (ind <= size)
+            #if (ind <= len)
             @inbounds shmem[ind] = x[ind]
             #end
         else
@@ -482,11 +482,11 @@ function JACC.shared(::CUDABackend, x::AbstractArray)
             j_local = threadIdx().y
             ind = (i_local - 1) * blockDim().x + j_local
             if ndims(x) == 1
-                #if (ind <= size)
+                #if (ind <= len)
                 @inbounds shmem[ind] = x[ind]
                 #end
             elseif ndims(x) == 2
-                #if (ind <= size)
+                #if (ind <= len)
                 @inbounds shmem[ind] = x[i_local, j_local]
                 #end
             end
@@ -494,7 +494,7 @@ function JACC.shared(::CUDABackend, x::AbstractArray)
     else
         if blockDim().y == 1
             ind = threadIdx().x
-            for i in (blockDim().x):(blockDim().x):size
+            for i in (blockDim().x):(blockDim().x):len
                 @inbounds shmem[ind] = x[ind]
                 ind += blockDim().x
             end
@@ -503,12 +503,12 @@ function JACC.shared(::CUDABackend, x::AbstractArray)
             j_local = threadIdx().y
             ind = (i_local - 1) * blockDim().x + j_local
             if ndims(x) == 1
-                for i in num_threads:num_threads:size
+                for i in num_threads:num_threads:len
                     @inbounds shmem[ind] = x[ind]
                     ind += num_threads
                 end
             elseif ndims(x) == 2
-                for i in num_threads:num_threads:size
+                for i in num_threads:num_threads:len
                     @inbounds shmem[ind] = x[i_local, j_local]
                     ind += num_threads
                 end
