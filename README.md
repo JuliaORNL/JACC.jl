@@ -6,7 +6,7 @@
 [![CI-CPU](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml)
 [![CI-GPU-NVIDIA](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml)
 [![CI-GPU-AMD](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml)
-[![ci-GPU-Apple](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml)
+[![CI-GPU-Apple](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml)
 
 CPU/GPU portable `array`/`parallel_for`/`parallel_reduce` in Julia for productive science.
 
@@ -45,9 +45,9 @@ Julia provides a tight, interoperable ecosystem for GPU programming. Still, vend
 Roadmap:
 
 - JACC v1.0 stable API including `@parallel_for`/`@parallel_reduce` macros by early 2026.
-- JACC.BLAS for kernel linear algebra routines.
+- JACC.BLAS for kernel-level linear algebra routines.
 - Expand JACC's ecosystem including scientific applications, see [JACC-Applications](https://github.com/JuliaORNL/JACC-applications)
-- New functionality impacting scientific users
+- New functionality impacting scientific users.
 
 ## Quick start
 
