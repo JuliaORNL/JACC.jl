@@ -483,6 +483,42 @@ function reduce_kernel_amdgpu_MN((M, N), op, red, ret)
     return nothing
 end
 
+function JACC.shared(::AMDGPUBackend, x::AbstractVector)
+    len = length(x)
+    shmem = @ROCDynamicLocalArray(eltype(x), len)
+    # 1D kernel or 2D kernel at y == 1 (to avoid concurrent writes)
+    if workgroupDim().y == 1 || workitemIdx().y == 1
+        for i in workitemIdx().x:workgroupDim().x:len
+            @inbounds shmem[i] = x[i]
+        end
+    end
+    sync_workgroup()
+    return shmem
+end
+
+function JACC.shared(::AMDGPUBackend, x::AbstractMatrix)
+    len = length(x)
+    shmem = @ROCDynamicLocalArray(eltype(x), size(x))
+    num_threads = workgroupDim().x * workgroupDim().y
+    if workgroupDim().y == 1
+        # TODO: 1D kernel with 2D array
+    else
+        if len <= num_threads
+            i_local = workitemIdx().x
+            j_local = workitemIdx().y
+            @inbounds shmem[i_local, j_local] = x[i_local, j_local]
+        else
+            for i in workitemIdx().x:workgroupDim().x:size(x, 1)
+                for j in workitemIdx().y:workgroupDim().y:size(x, 2)
+                    @inbounds shmem[i, j] = x[i, j]
+                end
+            end
+        end
+    end
+    sync_workgroup()
+    return shmem
+end
+
 function JACC.shared(::AMDGPUBackend, x::AbstractArray)
     len = length(x)
     shmem = @ROCDynamicLocalArray(eltype(x), size(x))

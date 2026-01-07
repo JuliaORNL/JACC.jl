@@ -467,50 +467,34 @@ function reduce_kernel_cuda_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(::CUDABackend, x::AbstractArray)
+function JACC.shared(::CUDABackend, x::AbstractVector)
+    len = length(x)
+    shmem = CuDynamicSharedArray(eltype(x), len)
+    # 1D kernel or 2D kernel at y == 1 (to avoid concurrent writes)
+    if blockDim().y == 1 || threadIdx().y == 1
+        for i in threadIdx().x:blockDim().x:len
+            @inbounds shmem[i] = x[i]
+        end
+    end
+    sync_threads()
+    return shmem
+end
+
+function JACC.shared(::CUDABackend, x::AbstractMatrix)
     len = length(x)
     shmem = CuDynamicSharedArray(eltype(x), size(x))
     num_threads = blockDim().x * blockDim().y
-    if (len <= num_threads)
-        if blockDim().y == 1
-            ind = threadIdx().x
-            #if (ind <= len)
-            @inbounds shmem[ind] = x[ind]
-            #end
-        else
-            i_local = threadIdx().x
-            j_local = threadIdx().y
-            ind = (i_local - 1) * blockDim().x + j_local
-            if ndims(x) == 1
-                #if (ind <= len)
-                @inbounds shmem[ind] = x[ind]
-                #end
-            elseif ndims(x) == 2
-                #if (ind <= len)
-                @inbounds shmem[ind] = x[i_local, j_local]
-                #end
-            end
-        end
+    if blockDim().y == 1
+        # TODO: 1D kernel with 2D array
     else
-        if blockDim().y == 1
-            ind = threadIdx().x
-            for i in (blockDim().x):(blockDim().x):len
-                @inbounds shmem[ind] = x[ind]
-                ind += blockDim().x
-            end
-        else
+        if len <= num_threads
             i_local = threadIdx().x
             j_local = threadIdx().y
-            ind = (i_local - 1) * blockDim().x + j_local
-            if ndims(x) == 1
-                for i in num_threads:num_threads:len
-                    @inbounds shmem[ind] = x[ind]
-                    ind += num_threads
-                end
-            elseif ndims(x) == 2
-                for i in num_threads:num_threads:len
-                    @inbounds shmem[ind] = x[i_local, j_local]
-                    ind += num_threads
+            @inbounds shmem[i_local, j_local] = x[i_local, j_local]
+        else
+            for i in threadIdx().x:blockDim().x:size(x, 1)
+                for j in threadIdx().y:blockDim().y:size(x, 2)
+                    @inbounds shmem[i, j] = x[i, j]
                 end
             end
         end

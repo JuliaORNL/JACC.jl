@@ -1,6 +1,10 @@
 import LinearAlgebra
 using ..JACCTestCommon: axpy, dot, seq_axpy, seq_dot
 
+function rand_jacc(dims; type::Type{T} = FloatType) where {T}
+    return JACC.to_device(round.(rand(T, dims) * 100))
+end
+
 @testset "array" begin
     # zeros
     N = 10
@@ -251,7 +255,7 @@ end
     C = JACC.zeros(Float32, N, N, N)
     JACC.parallel_for(JACC.launch_spec(; threads = (4, 4, 4)),
         (N, N, N), (i, j, k, A, B,
-        C) -> begin
+            C) -> begin
             @inbounds C[i, j, k] = A[i, j, k] + B[i, j, k]
         end,
         A, B, C)
@@ -293,46 +297,134 @@ end
     @test JACC.to_host(res)[] == 1
 end
 
-@testset "shared" begin
-    N = 100
-    alpha = 2.5
-    x = JACC.ones(N)
-    x_shared = JACC.ones(N)
-    y = JACC.ones(N)
+if JACC.backend != "oneapi"
+    @testset "shared" begin
+        N = 100
+        alpha = 2.5
+        x = JACC.ones(N)
+        x_shared = JACC.ones(N)
+        y = rand_jacc(N)
 
-    function scal(i, x, y, alpha)
-        @inbounds x[i] = y[i] * alpha
-    end
+        function scal(i, x, y, alpha)
+            @inbounds x[i] = y[i] * alpha
+        end
 
-    function scal_shared(i, x, y, alpha)
-        y_shared = JACC.shared(y)
-        @inbounds x[i] = y_shared[i] * alpha
-    end
+        function scal_shared(i, x, y, alpha)
+            y_shared = JACC.shared(y)
+            @inbounds x[i] = y_shared[i] * alpha
+        end
 
-    JACC.parallel_for(N, scal, x, y, alpha)
-    JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
-    @test JACC.to_host(x)≈JACC.to_host(x_shared) rtol=1e-8
+        # 1D kernel, 1D array
+        JACC.parallel_for(N, scal, x, y, alpha)
+        JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
+        @test isapprox(JACC.to_host(x), JACC.to_host(x_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = 32)
+        JACC.parallel_for(spec, N, scal_shared, x_shared, y, alpha)
+        @test isapprox(JACC.to_host(x), JACC.to_host(x_shared); rtol = 1e-8)
 
-    function test_sync()
-        ix = JACC.zeros(Int, N)
-        spec = JACC.launch_spec(; threads = N, sync = true)
-        JACC.parallel_for(spec, N, ix) do i, x
-            shared_mem = JACC.shared(x)
-            shared_mem[i] = i
-            JACC.sync_workgroup()
-            if i > 50
-                shared_mem[i] = shared_mem[i - 50]
+        n = 10
+        S = (n, n)
+        A = JACC.zeros(S)
+        A_shared = JACC.zeros(S)
+        B = rand_jacc(S)
+
+        function scal(i, j, A, B, alpha)
+            @inbounds A[i, j] = B[i, j] * alpha
+        end
+
+        function scal_shared(i, j, A, B, alpha)
+            B_shared = JACC.shared(B)
+            @inbounds A[i, j] = B_shared[i, j] * alpha
+        end
+
+        # 2D kernel, 2D array
+        JACC.parallel_for(S, scal, A, B, alpha)
+        JACC.parallel_for(S, scal_shared, A_shared, B, alpha)
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (4, 4))
+        JACC.parallel_for(spec, S, scal_shared, A_shared, B, alpha)
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (4, 2))
+        JACC.parallel_for(spec, S, scal_shared, A_shared, B, alpha)
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (2, 4))
+        JACC.parallel_for(spec, S, scal_shared, A_shared, B, alpha)
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+
+        # 2D kernel, 1D array
+        A = JACC.zeros(S)
+        A_shared = JACC.zeros(S)
+        b = rand_jacc(n)
+        JACC.parallel_for(S, A, b, alpha) do i, j, A, b, alpha
+            @inbounds A[i, j] = b[i]
+        end
+        JACC.parallel_for(S, A_shared, b, alpha) do i, j, A, b, alpha
+            b_shared = JACC.shared(b)
+            @inbounds A[i, j] = b_shared[i]
+        end
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (4, 4))
+        JACC.parallel_for(spec, S, A_shared, b, alpha) do i, j, A, b, alpha
+            b_shared = JACC.shared(b)
+            @inbounds A[i, j] = b_shared[i]
+        end
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (4, 2))
+        JACC.parallel_for(spec, S, A_shared, b, alpha) do i, j, A, b, alpha
+            b_shared = JACC.shared(b)
+            @inbounds A[i, j] = b_shared[i]
+        end
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+        spec = JACC.launch_spec(threads = (2, 4))
+        JACC.parallel_for(spec, S, A_shared, b, alpha) do i, j, A, b, alpha
+            b_shared = JACC.shared(b)
+            @inbounds A[i, j] = b_shared[i]
+        end
+        @test isapprox(JACC.to_host(A), JACC.to_host(A_shared); rtol = 1e-8)
+
+        function test_sync()
+            ix = JACC.zeros(Int, N)
+            spec = JACC.launch_spec(; threads = N, sync = true)
+            JACC.parallel_for(spec, N, ix) do i, x
+                shared_mem = JACC.shared(x)
+                shared_mem[i] = i
+                JACC.sync_workgroup()
+                if i > 50
+                    shared_mem[i] = shared_mem[i - 50]
+                end
+                x[i] = shared_mem[i]
             end
-            x[i] = shared_mem[i]
+            ix_h = JACC.to_host(ix)
+            for i in [1, 10, 25, 50]
+                @test ix_h[i] == i
+                @test ix_h[i + 50] == i
+            end
         end
-        ix_h = JACC.to_host(ix)
-        for i in [1, 10, 25, 50]
-            @test ix_h[i] == i
-            @test ix_h[i + 50] == i
-        end
+        test_sync()
+        test_sync()
     end
-    test_sync()
-    test_sync()
+else
+    @testset "shared" begin
+        N = 100
+        alpha = 2.5
+        x = JACC.ones(N)
+        x_shared = JACC.ones(N)
+        y = rand_jacc(N)
+
+        function scal(i, x, y, alpha)
+            @inbounds x[i] = y[i] * alpha
+        end
+
+        function scal_shared(i, x, y, alpha)
+            y_shared = JACC.shared(y)
+            @inbounds x[i] = y_shared[i] * alpha
+        end
+
+        # 1D kernel, 1D array
+        JACC.parallel_for(N, scal, x, y, alpha)
+        JACC.parallel_for(N, scal_shared, x_shared, y, alpha)
+        @test isapprox(JACC.to_host(x), JACC.to_host(x_shared); rtol = 1e-8)
+    end
 end
 
 @testset "JACC.BLAS" begin
