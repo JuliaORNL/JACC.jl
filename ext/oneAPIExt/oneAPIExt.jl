@@ -13,7 +13,9 @@ default_stream() = oneAPI.global_queue(oneAPI.context(), oneAPI.device())
 
 JACC.default_stream(::oneAPIBackend) = default_stream()
 
-JACC.create_stream(::oneAPIBackend) = oneAPI.oneL0.ZeCommandQueue(oneAPI.context(), oneAPI.device())
+function JACC.create_stream(::oneAPIBackend)
+    oneAPI.oneL0.ZeCommandQueue(oneAPI.context(), oneAPI.device())
+end
 
 function JACC.synchronize(::oneAPIBackend; stream = default_stream())
     oneAPI.synchronize(stream)
@@ -441,45 +443,39 @@ function reduce_kernel_oneapi_MN((M, N), op, red, ret)
     return nothing
 end
 
-function JACC.shared(::oneAPIBackend, x::AbstractArray)
-    size::Int32 = length(x)
-    # This is wrong, we should use size not 512 ...
-    shmem = oneLocalArray(eltype(x), 512)
-    num_threads = get_local_size(1) * get_local_size(2)
-    if (size <= num_threads)
-        if get_local_size(2) == 1
-            ind = get_global_id(1)
-            @inbounds shmem[ind] = x[ind]
-        else
-            i_local = get_local_id(1)
-            j_local = get_local_id(2)
-            ind = i_local - 1 * get_local_size(1) + j_local
-            if ndims(x) == 1
-                @inbounds shmem[ind] = x[ind]
-            elseif ndims(x) == 2
-                @inbounds shmem[ind] = x[i_local, j_local]
-            end
+function _make_shared_similar(x::oneDeviceArray{T, N, A}) where {T, N, A}
+    shmem_data = oneLocalArray(eltype(x), 512)
+    return Base.ReshapedArray(shmem_data, size(x), ())
+end
+
+function JACC.shared(::oneAPIBackend, x::AbstractVector)
+    len = length(x)
+    shmem = _make_shared_similar(x)
+    # 1D kernel or 2D kernel at y == 1 (to avoid concurrent writes)
+    if get_local_size(2) == 1 || get_local_id(2) == 1
+        for i in get_local_id(1):get_local_size(1):len
+            @inbounds shmem[i] = x[i]
         end
+    end
+    barrier()
+    return shmem
+end
+
+function JACC.shared(::oneAPIBackend, x::AbstractMatrix)
+    len = length(x)
+    shmem = _make_shared_similar(x)
+    num_threads = get_local_size(1) * get_local_size(2)
+    if get_local_size(2) == 1
+        # TODO: 1D kernel with 2D array
     else
-        if get_local_size(2) == 1
-            ind = get_local_id(1)
-            for i in get_local_size(1):get_local_size(1):size
-                @inbounds shmem[ind] = x[ind]
-                ind += get_local_size(1)
-            end
-        else
+        if len <= num_threads
             i_local = get_local_id(1)
             j_local = get_local_id(2)
-            ind = (i_local - 1) * get_local_size(1) + j_local
-            if ndims(x) == 1
-                for i in num_threads:num_threads:size
-                    @inbounds shmem[ind] = x[ind]
-                    ind += num_threads
-                end
-            elseif ndims(x) == 2
-                for i in num_threads:num_threads:size
-                    @inbounds shmem[ind] = x[i_local, j_local]
-                    ind += num_threads
+            @inbounds shmem[i_local, j_local] = x[i_local, j_local]
+        else
+            for i in get_local_id(1):get_local_size(1):size(x, 1)
+                for j in get_local_id(2):get_local_size(2):size(x, 2)
+                    @inbounds shmem[i, j] = x[i, j]
                 end
             end
         end
