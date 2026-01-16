@@ -691,6 +691,46 @@ end
     @test JACC.to_host(C)≈C_expected rtol=1e-5
 end
 
+@testset "macro" begin
+    add5! = (i, a) -> a[i] += 5.0;
+    L = 10
+    M = 10
+    N = 10
+
+    # 1D
+    a_device = rand_jacc(N)
+    a_host = JACC.to_host(a_device)
+    a_expected = a_host .+ 5.0
+    JACC.@parallel_for dims=N add5!(a_device)
+    @test JACC.to_host(a_device) ≈ a_expected rtol=1e-5
+
+    a_device = JACC.to_device(a_host)
+    ret = JACC.@parallel_reduce dims=N dot(a_device, a_device)
+    res = JACC.to_host(ret)[]
+    @test res ≈ seq_dot(N, a_host, a_host) rtol=1e-1
+
+    ret = JACC.@parallel_reduce dims=N op=min init=Inf JACC.elem_access(a_device)
+    res = JACC.to_host(ret)[]
+    @test res ≈ minimum(a_host)
+
+    # 2D
+    A2 = JACC.ones(M, N)
+    B2 = JACC.ones(M, N)
+    C2 = JACC.zeros(M, N)
+    matrix_sum = (i, j, A, B, C) -> C[i, j] = A[i, j] + B[i, j]
+    JACC.@parallel_for dims=(M,N) matrix_sum(A2, B2, C2)
+    C2_expected = Float32(2.0) .* ones(Float32, M, N)
+    @test JACC.to_host(C2) ≈ C2_expected rtol=1e-5
+
+    ret = JACC.@parallel_reduce dims=(M,N) dot(A2, B2)
+    res = JACC.to_host(ret)[]
+    @test res ≈ seq_dot(M, N, JACC.to_host(A2), JACC.to_host(B2)) rtol=1e-5
+
+    ret = JACC.@parallel_reduce dims=(M,N) op=min init=Inf JACC.elem_access(A2)
+    res = JACC.to_host(ret)[]
+    @test res ≈ 1
+end
+
 @testset "CG" begin
     function matvecmul(i, a1, a2, a3, x, y, SIZE)
         if i == 1

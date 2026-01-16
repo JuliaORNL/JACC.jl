@@ -151,7 +151,7 @@ end
 end
 
 @inline function (reducer::ParallelReduce)(a::AbstractArray)
-    reducer(_elem_access(a), a)
+    reducer(elem_access, a)
 end
 
 function set_init!(reducer::ParallelReduce{B, T}, init) where {B, T}
@@ -209,15 +209,15 @@ end
 array_size(a::AbstractArray) = size(a)
 array_size(a::AbstractVector) = length(a)
 
-_elem_access(a::AbstractArray) = (args...) -> args[end][args[1:(end - 1)]...]
-_elem_access(a::AbstractArray{T, 3}) where {T} = (i, j, k, a) -> a[i, j, k]
-_elem_access(a::AbstractMatrix) = (i, j, a) -> a[i, j]
-_elem_access(a::AbstractVector) = (i, a) -> a[i]
+elem_access(i, a::AbstractVector) = a[i]
+elem_access(i, j, a::AbstractMatrix) = a[i, j]
+elem_access(i, j, k, a::AbstractArray{T, 3}) where {T} = a[i, j, k]
+elem_access(args...) = args[end][args[1:(end - 1)]...]
 
 @inline function parallel_reduce(
         op, a::AbstractArray; init = default_init(eltype(a), op))
     return parallel_reduce(
-        _elem_access(a), array_size(a), a; op = op, init = init)
+        elem_access, array_size(a), a; op = op, init = init)
 end
 
 @inline parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a)
@@ -225,7 +225,7 @@ end
 @inline function parallel_reduce(spec::LaunchSpec, op, a::AbstractArray;
         init = default_init(eltype(a), op))
     return parallel_reduce(
-        _elem_access(a), spec, array_size(a), a; op = op, init = init)
+        elem_access, spec, array_size(a), a; op = op, init = init)
 end
 
 @inline function parallel_reduce(spec::LaunchSpec, a::AbstractArray)
@@ -233,5 +233,7 @@ end
 end
 
 include("threads/threads.jl")
+
+include("macro.jl")
 
 end # module JACC
