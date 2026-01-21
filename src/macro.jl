@@ -12,7 +12,7 @@ function _construct_call(api_func, valid_keys, args...)
     end
 
     Meta.isexpr(call, :call) ||
-        throw(ArgumentError("last argument should be a function call"))
+        throw(ArgumentError("last argument should be a kernel function call"))
     func = call.args[1]
     args = call.args[2:end]
 
@@ -31,10 +31,10 @@ end
 
 macro parallel_for(args...)
     esc(_construct_call(JACC.parallel_for,
-        [:dims, :threads, :blocks, :stream, :sync], args...))
+        [:range, :threads, :blocks, :shmem_size, :stream, :sync], args...))
 end
 
 macro parallel_reduce(args...)
     esc(_construct_call(JACC.parallel_reduce,
-        [:dims, :type, :op, :init, :stream, :sync], args...))
+        [:range, :type, :op, :init, :stream, :sync], args...))
 end

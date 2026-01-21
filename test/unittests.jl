@@ -135,7 +135,7 @@ end
     @test JACC.parallel_reduce(a) == 10
     @test JACC.parallel_reduce(min, a) == 1
     reducer = JACC.reducer(;
-        type = eltype(a), dims = JACC.array_size(a), op = +)
+        type = eltype(a), range = JACC.array_size(a), op = +)
     reducer(a)
     @test JACC.get_result(reducer) == 10
     a2 = JACC.ones(Int, (2, 2))
@@ -229,7 +229,7 @@ end
     end
     @test JACC.to_host(a_device)≈a_expected rtol=1e-5
     a_expected = a_expected .+ 5.0
-    JACC.parallel_for(; dims = N, args = (a_device,),
+    JACC.parallel_for(; range = N, args = (a_device,),
         f = (i, a) -> begin
             @inbounds a[i] += 5.0
         end, threads = 1000,
@@ -269,7 +269,7 @@ end
     res = JACC.parallel_reduce(JACC.launch_spec(), N, (i, a) -> a[i], a)
     @test JACC.to_host(res)[] == N
     res = JACC.parallel_reduce(;
-        dims = N, f = (i, a) -> begin
+        range = N, f = (i, a) -> begin
             a[i]
         end, args = (a,), sync = false)
     JACC.synchronize()
@@ -701,15 +701,15 @@ end
     a_device = rand_jacc(N)
     a_host = JACC.to_host(a_device)
     a_expected = a_host .+ 5.0
-    JACC.@parallel_for dims=N add5!(a_device)
+    JACC.@parallel_for range=N add5!(a_device)
     @test JACC.to_host(a_device) ≈ a_expected rtol=1e-5
 
     a_device = JACC.to_device(a_host)
-    ret = JACC.@parallel_reduce dims=N dot(a_device, a_device)
+    ret = JACC.@parallel_reduce range=N dot(a_device, a_device)
     res = JACC.to_host(ret)[]
     @test res ≈ seq_dot(N, a_host, a_host) rtol=1e-1
 
-    ret = JACC.@parallel_reduce dims=N op=min init=Inf JACC.elem_access(a_device)
+    ret = JACC.@parallel_reduce range=N op=min init=Inf JACC.elem_access(a_device)
     res = JACC.to_host(ret)[]
     @test res ≈ minimum(a_host)
 
@@ -718,15 +718,15 @@ end
     B2 = JACC.ones(M, N)
     C2 = JACC.zeros(M, N)
     matrix_sum = (i, j, A, B, C) -> C[i, j] = A[i, j] + B[i, j]
-    JACC.@parallel_for dims=(M,N) matrix_sum(A2, B2, C2)
+    JACC.@parallel_for range=(M,N) matrix_sum(A2, B2, C2)
     C2_expected = Float32(2.0) .* ones(Float32, M, N)
     @test JACC.to_host(C2) ≈ C2_expected rtol=1e-5
 
-    ret = JACC.@parallel_reduce dims=(M,N) dot(A2, B2)
+    ret = JACC.@parallel_reduce range=(M,N) dot(A2, B2)
     res = JACC.to_host(ret)[]
     @test res ≈ seq_dot(M, N, JACC.to_host(A2), JACC.to_host(B2)) rtol=1e-5
 
-    ret = JACC.@parallel_reduce dims=(M,N) op=min init=Inf JACC.elem_access(A2)
+    ret = JACC.@parallel_reduce range=(M,N) op=min init=Inf JACC.elem_access(A2)
     res = JACC.to_host(ret)[]
     @test res ≈ 1
 end

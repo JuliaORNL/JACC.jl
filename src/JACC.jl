@@ -78,8 +78,8 @@ end
     parallel_for(f, spec, dims, x...)
 end
 
-@inline function parallel_for(; dims::AllDims, f, args::Tuple, kw...)
-    parallel_for(f, launch_spec(; kw...), dims, args...)
+@inline function parallel_for(; range::TR, f, args::Tuple, kw...) where {TR}
+    parallel_for(f, launch_spec(; kw...), range, args...)
 end
 
 default_init(::Type{T}, ::typeof(+)) where {T} = zero(T)
@@ -98,8 +98,8 @@ reduce_workspace() = reduce_workspace(default_backend(), default_float()())
 
 reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
 
-@kwdef mutable struct ParallelReduce{Backend, T, Op, Dim, W <: ReduceWorkspace}
-    dims::Dim = zeros(Int, Dim)
+@kwdef mutable struct ParallelReduce{Backend, T, Op, R, W <: ReduceWorkspace}
+    range::R = zeros(Int, R)
     op::Op = () -> nothing
     init::T = default_init(T, op)
     stream = default_stream(Backend())
@@ -114,23 +114,23 @@ end
 end
 
 @inline function ParallelReduce{Backend, T}(;
-        dims, op, kw...) where {Backend, T}
+        range, op, kw...) where {Backend, T}
     W = Base.return_types(reduce_workspace, (Backend, T))[]
-    ParallelReduce{Backend, T, typeof(op), typeof(dims), W}(;
-        dims = dims, op = op, kw...)
+    ParallelReduce{Backend, T, typeof(op), typeof(range), W}(;
+        range = range, op = op, kw...)
 end
 
-@inline function reducer(; type = nothing, dims, op = +, init = nothing)
+@inline function reducer(; type = nothing, range, op = +, init = nothing)
     _init = _resolve_init_type(op, type, init)
     _workspace = reduce_workspace(default_backend(), _init)
     ParallelReduce{
-        typeof(default_backend()), typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
-        dims = dims, op = op, init = _init, workspace = _workspace)
+        typeof(default_backend()), typeof(_init), typeof(op), typeof(range), typeof(_workspace)}(;
+        range = range, op = op, init = _init, workspace = _workspace)
 end
 
-@inline function reducer(::Type{T}, dims::AllDims, op = +;
+@inline function reducer(::Type{T}, range::AllDims, op = +;
         init = default_init(T, op)) where {T}
-    reducer(; type = T, dims = dims, op = op, init = init)
+    reducer(; type = T, range = range, op = op, init = init)
 end
 
 struct ReduceKernel1DND{T} end
@@ -147,7 +147,7 @@ function _parallel_reduce!(
 end
 
 @inline function (reducer::ParallelReduce)(f, x...)
-    _parallel_reduce!(reducer, reducer.dims, f, x...)
+    _parallel_reduce!(reducer, reducer.range, f, x...)
 end
 
 @inline function (reducer::ParallelReduce)(a::AbstractArray)
@@ -184,7 +184,7 @@ end
     _init = _resolve_init_type(op, type, init)
     _workspace = JACC.reduce_workspace(TBackend(), _init)
     reducer = ParallelReduce{TBackend, typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
-        dims = dims,
+        range = dims,
         op = op,
         init = _init,
         stream = spec.stream,
@@ -200,9 +200,9 @@ end
     return parallel_reduce(f, spec, dims, x...; kw...)
 end
 
-@inline function parallel_reduce(; dims::AllDims, f, args::Tuple,
-        type = nothing, op = +, init = nothing, kw...)
-    return parallel_reduce(f, launch_spec(; kw...), dims, args...; type = type,
+@inline function parallel_reduce(; range::TR, f, args::Tuple,
+        type = nothing, op = +, init = nothing, kw...) where {TR}
+    return parallel_reduce(f, launch_spec(; kw...), range, args...; type = type,
         op = op, init = init)
 end
 
