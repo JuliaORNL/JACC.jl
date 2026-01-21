@@ -98,26 +98,34 @@ reduce_workspace() = reduce_workspace(default_backend(), default_float()())
 
 reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
 
-@kwdef mutable struct ParallelReduce{Backend, T, Op, Dim}
+@kwdef mutable struct ParallelReduce{Backend, T, Op, Dim, W <: ReduceWorkspace}
     dims::Dim = zeros(Int, Dim)
     op::Op = () -> nothing
     init::T = default_init(T, op)
     stream = default_stream(Backend())
     sync::Bool = true
-    workspace::ReduceWorkspace = reduce_workspace(Backend(), init)
+    workspace::W = reduce_workspace(Backend(), init)
+end
+
+@inline function ParallelReduce{Backend, T}(;
+        dims, op, workspace, kw...) where {Backend, T}
+    ParallelReduce{Backend, T, typeof(op), typeof(dims), typeof(workspace)}(;
+        dims = dims, op = op, workspace = workspace, kw...)
 end
 
 @inline function ParallelReduce{Backend, T}(;
         dims, op, kw...) where {Backend, T}
-    ParallelReduce{Backend, T, typeof(op), typeof(dims)}(;
+    W = Base.return_types(reduce_workspace, (Backend, T))[]
+    ParallelReduce{Backend, T, typeof(op), typeof(dims), W}(;
         dims = dims, op = op, kw...)
 end
 
 @inline function reducer(; type = nothing, dims, op = +, init = nothing)
     _init = _resolve_init_type(op, type, init)
+    _workspace = reduce_workspace(default_backend(), _init)
     ParallelReduce{
-        typeof(default_backend()), typeof(_init), typeof(op), typeof(dims)}(;
-        dims = dims, op = op, init = _init)
+        typeof(default_backend()), typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
+        dims = dims, op = op, init = _init, workspace = _workspace)
 end
 
 @inline function reducer(::Type{T}, dims::AllDims, op = +;
@@ -174,13 +182,14 @@ end
         dims::AllDims, x...; type = nothing, op = +,
         init = nothing) where {TBackend}
     _init = _resolve_init_type(op, type, init)
-    reducer = ParallelReduce{TBackend, typeof(_init), typeof(op), typeof(dims)}(;
+    _workspace = JACC.reduce_workspace(TBackend(), _init)
+    reducer = ParallelReduce{TBackend, typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
         dims = dims,
         op = op,
         init = _init,
         stream = spec.stream,
         sync = spec.sync,
-        workspace = JACC.reduce_workspace(TBackend(), _init)
+        workspace = _workspace
     )
     reducer(f, x...)
     return reducer.workspace.ret
