@@ -136,8 +136,8 @@ end
 
 @inline function JACC.parallel_reduce(
         f, ::ThreadsBackend, N::Integer, x...; op, init)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        range = N, op = op, init = init)
+    reducer = JACC.reducer(
+        backend = ThreadsBackend(), range = N, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
@@ -191,8 +191,8 @@ end
 @inline function JACC.parallel_reduce(f, ::ThreadsBackend,
         (M, N)::NTuple{2, Integer}, x...; op, init)
     dims = (M, N)
-    reducer = JACC.ParallelReduce{ThreadsBackend, typeof(init)}(;
-        range = dims, op = op, init = init)
+    reducer = JACC.reducer(
+        backend = ThreadsBackend(), range = dims, op = op, init = init)
     reducer(f, x...)
     return JACC.get_result(reducer)
 end
