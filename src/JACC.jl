@@ -78,6 +78,38 @@ end
     parallel_for(f, spec, dims, x...)
 end
 
+# @inline function _range_kernel(i, range, f, x...)::Nothing
+#     @inbounds f(range[i], x...)
+#     return nothing
+# end
+
+@inline _range_kernel(i, range, f, x...) = @inbounds f(range[i], x...)
+
+@inline function parallel_for(f, range::AbstractRange, x...)
+    parallel_for(_range_kernel, length(range), range, f, x...)
+end
+
+@inline function parallel_for(f, spec::LaunchSpec, range::AbstractRange, x...)
+    parallel_for(_range_kernel, spec, length(range), range, f, x...)
+end
+
+struct _RangesKernel{N} end
+
+@inline function (::_RangesKernel{N})(args...) where {N}
+    @inbounds rt = args[N + 1]
+    @inbounds return args[N + 2](getindex.(rt, args[1:N])..., args[(N + 3):end]...)
+end
+
+@inline function parallel_for(f, range::NTuple{N, AbstractRange}, x...) where {N}
+    parallel_for(_RangesKernel{N}(), length.(range), range, f, x...)
+end
+
+@inline function parallel_for(f, spec::LaunchSpec,
+        range::NTuple{N, AbstractRange}, x...) where {N}
+    parallel_for(_RangesKernel{N}(), spec, length.(range), range, f, x...)
+end
+
+
 @inline function parallel_for(; range::TR, f, args::Tuple, kw...) where {TR}
     parallel_for(f, launch_spec(; kw...), range, args...)
 end
@@ -167,9 +199,8 @@ end
     return parallel_reduce(f, dims, x...; kw...)
 end
 
-@inline function JACC.parallel_reduce(f, spec::LaunchSpec{TBackend},
-        dims::AllDims, x...; type = nothing, op = +,
-        init = nothing) where {TBackend}
+@inline function parallel_reduce(f, spec::LaunchSpec{TBackend}, dims::AllDims,
+        x...; type = nothing, op = +, init = nothing) where {TBackend}
     _init = _resolve_init_type(op, type, init)
     _workspace = JACC.reduce_workspace(TBackend(), _init)
     reducer = ParallelReduce{
@@ -188,6 +219,25 @@ end
 @inline function parallel_reduce(
         spec::LaunchSpec, dims::AllDims, f, x...; kw...)
     return parallel_reduce(f, spec, dims, x...; kw...)
+end
+
+@inline function parallel_reduce(f, range::AbstractRange, x...; kw...)
+    parallel_reduce(_range_kernel, length(range), range, f, x...; kw...)
+end
+
+@inline function parallel_reduce(
+        f, range::NTuple{N, AbstractRange}, x...; kw...) where {N}
+    parallel_reduce(_RangesKernel{N}(), length.(range), range, f, x...; kw...)
+end
+
+@inline function parallel_reduce(f, spec::LaunchSpec{TBackend},
+        range::AbstractRange, x...; kw...) where {TBackend}
+    parallel_reduce(_range_kernel, spec, length(range), range, f, x...; kw...)
+end
+
+@inline function parallel_reduce(f, spec::LaunchSpec{TBackend},
+        range::NTuple{N, AbstractRange}, x...; kw...) where {TBackend, N}
+    parallel_reduce(_RangesKernel{N}(), spec, length.(range), range, f, x...; kw...)
 end
 
 @inline function parallel_reduce(; range::TR, f, args::Tuple,
@@ -211,7 +261,11 @@ elem_access(args...) = args[end][args[1:(end - 1)]...]
         elem_access, array_size(a), a; op = op, init = init)
 end
 
-@inline parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a)
+@inline parallel_reduce(a::AbstractArray; kw...) = parallel_reduce(+, a, kw...)
+
+# TODO: range version:
+# - `parallel_reduce(<r>, a)`
+# - `parallel_reduce(<r>, op, a)`
 
 @inline function parallel_reduce(spec::LaunchSpec, op, a::AbstractArray;
         init = default_init(eltype(a), op))
