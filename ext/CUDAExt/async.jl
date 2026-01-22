@@ -63,8 +63,8 @@ function JACC.Async.parallel_reduce(
         ::CUDABackend, id::Integer, dims::JACC.IDims,
         op::Callable, f::Callable, x...; init)
     set_relative_device!(id)
-    reducer = JACC.ParallelReduce{CUDABackend, typeof(init)}(;
-        range = dims, op = op, init = init, sync = false)
+    reducer = JACC.reducer(; backend = CUDABackend(), range = dims, op = op,
+        init = init, sync = false)
     reducer(f, x...)
     ret = reducer.workspace.ret
     CUDA.device!(0)

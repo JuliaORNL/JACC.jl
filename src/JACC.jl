@@ -107,25 +107,14 @@ reduce_workspace(init::T) where {T} = reduce_workspace(default_backend(), init)
     workspace::W = reduce_workspace(Backend(), init)
 end
 
-@inline function ParallelReduce{Backend, T}(;
-        dims, op, workspace, kw...) where {Backend, T}
-    ParallelReduce{Backend, T, typeof(op), typeof(dims), typeof(workspace)}(;
-        dims = dims, op = op, workspace = workspace, kw...)
-end
-
-@inline function ParallelReduce{Backend, T}(;
-        range, op, kw...) where {Backend, T}
-    W = Base.return_types(reduce_workspace, (Backend, T))[]
-    ParallelReduce{Backend, T, typeof(op), typeof(range), W}(;
-        range = range, op = op, kw...)
-end
-
-@inline function reducer(; type = nothing, range, op = +, init = nothing)
+@inline function reducer(;
+        range, backend::Backend = default_backend(), type = nothing,
+        op = +, init = nothing, kw...) where {Backend}
     _init = _resolve_init_type(op, type, init)
     _workspace = reduce_workspace(default_backend(), _init)
     ParallelReduce{
-        typeof(default_backend()), typeof(_init), typeof(op), typeof(range), typeof(_workspace)}(;
-        range = range, op = op, init = _init, workspace = _workspace)
+        Backend, typeof(_init), typeof(op), typeof(range), typeof(_workspace)}(;
+        range = range, op = op, init = _init, workspace = _workspace, kw...)
 end
 
 @inline function reducer(::Type{T}, range::AllDims, op = +;
@@ -183,7 +172,8 @@ end
         init = nothing) where {TBackend}
     _init = _resolve_init_type(op, type, init)
     _workspace = JACC.reduce_workspace(TBackend(), _init)
-    reducer = ParallelReduce{TBackend, typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
+    reducer = ParallelReduce{
+        TBackend, typeof(_init), typeof(op), typeof(dims), typeof(_workspace)}(;
         range = dims,
         op = op,
         init = _init,
@@ -202,7 +192,8 @@ end
 
 @inline function parallel_reduce(; range::TR, f, args::Tuple,
         type = nothing, op = +, init = nothing, kw...) where {TR}
-    return parallel_reduce(f, launch_spec(; kw...), range, args...; type = type,
+    return parallel_reduce(
+        f, launch_spec(; kw...), range, args...; type = type,
         op = op, init = init)
 end
 

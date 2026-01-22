@@ -62,8 +62,8 @@ end
 function JACC.Async.parallel_reduce(::oneAPIBackend, id::Integer,
         dims::JACC.IDims, op::Callable, f::Callable, x...; init)
     set_relative_device!(id)
-    reducer = JACC.ParallelReduce{oneAPIBackend, typeof(init)}(;
-        range = dims, op = op, init = init, sync = false)
+    reducer = JACC.reducer(; backend = oneAPIBackend(), range = dims, op = op,
+        init = init, sync = false)
     reducer(f, x...)
     ret = reducer.workspace.ret
     oneAPI.device!(1)
