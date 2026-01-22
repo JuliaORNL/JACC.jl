@@ -718,17 +718,100 @@ end
     B2 = JACC.ones(M, N)
     C2 = JACC.zeros(M, N)
     matrix_sum = (i, j, A, B, C) -> C[i, j] = A[i, j] + B[i, j]
-    JACC.@parallel_for range=(M,N) matrix_sum(A2, B2, C2)
+    JACC.@parallel_for range=(M, N) matrix_sum(A2, B2, C2)
     C2_expected = Float32(2.0) .* ones(Float32, M, N)
     @test JACC.to_host(C2) ≈ C2_expected rtol=1e-5
 
-    ret = JACC.@parallel_reduce range=(M,N) dot(A2, B2)
+    ret = JACC.@parallel_reduce range=(M, N) dot(A2, B2)
     res = JACC.to_host(ret)[]
     @test res ≈ seq_dot(M, N, JACC.to_host(A2), JACC.to_host(B2)) rtol=1e-5
 
-    ret = JACC.@parallel_reduce range=(M,N) op=min init=Inf JACC.elem_access(A2)
+    ret = JACC.@parallel_reduce range=(M, N) op=min init=Inf JACC.elem_access(A2)
     res = JACC.to_host(ret)[]
     @test res ≈ 1
+end
+
+@testset "UnitRange" begin
+    a = JACC.zeros(10)
+
+    JACC.parallel_for(2:9, a) do i, a
+        a[i] = 1.0
+    end
+    a_host = JACC.to_host(a)
+    @test a_host[2:9] ≈ ones(8)
+    @test a_host[1] == 0.0
+    @test a_host[10] == 0.0
+
+    A = JACC.zeros(10, 10)
+
+    JACC.parallel_for((2:9, 2:9), A) do i, j, A
+        A[i, j] = 1.0
+    end
+    A_host = JACC.to_host(A)
+    @test A_host[2:9, 2:9] ≈ ones(8, 8)
+    @test A_host[1, :] ≈ zeros(10)
+    @test A_host[10, :] ≈ zeros(10)
+    @test A_host[:, 1] ≈ zeros(10)
+    @test A_host[:, 10] ≈ zeros(10)
+
+    res = JACC.parallel_reduce(JACC.elem_access, 3:8, a)
+    @test res ≈ 6.0
+
+    res = JACC.parallel_reduce(JACC.elem_access, (3:8, 3:8), A)
+    @test res ≈ 36.0
+end
+
+if JACC.backend != "metal"
+    @testset "StepRange" begin
+        a = JACC.zeros(10)
+
+        JACC.parallel_for(2:9, a) do i, a
+            a[i] = 1.0
+        end
+        JACC.parallel_for(
+            range = 2:2:8, f = (i, a) -> a[i] = 2.0, args = (a,), threads = 8)
+        a_host = JACC.to_host(a)
+        @test a_host[1] == 0.0
+        @test a_host[10] == 0.0
+        @test a_host[2:2:8] ≈ 2.0 .* ones(4)
+        @test a_host[3:2:7] ≈ ones(3)
+
+        A = JACC.zeros(10, 10)
+
+        JACC.parallel_for((2:9, 2:9), A) do i, j, A
+            A[i, j] = 1.0
+        end
+        JACC.parallel_for(
+            range = (2:2:8, 2:2:8), f = (i, j, a) -> a[i, j] = 2.0,
+            args = (A,), threads = (8, 8))
+        A_host = JACC.to_host(A)
+        @test A_host[2:2:8, 2:2:8] ≈ 2.0 .* ones(4, 4)
+        @test A_host[3:2:7, 3:2:7] ≈ ones(3, 3)
+        @test A_host[1, :] ≈ zeros(10)
+        @test A_host[10, :] ≈ zeros(10)
+        @test A_host[:, 1] ≈ zeros(10)
+        @test A_host[:, 10] ≈ zeros(10)
+
+        ret = JACC.@parallel_reduce range=2:3:8 op=min JACC.elem_access(a)
+        res = JACC.to_host(ret)[]
+        @test res ≈ 1.0
+
+        ret = JACC.parallel_reduce(;
+            range = 2:2:8, f = JACC.elem_access, args = (a,), sync = false)
+        JACC.synchronize()
+        res = JACC.to_host(ret)[]
+        @test res ≈ 8.0
+
+        ret = JACC.@parallel_reduce range=(2:3:8, 2:3:8) op=min JACC.elem_access(A)
+        res = JACC.to_host(ret)[]
+        @test res ≈ 1.0
+
+        ret = JACC.parallel_reduce(;
+            range = (2:2:8, 2:2:8), f = JACC.elem_access, args = (A,), sync = false)
+        JACC.synchronize()
+        res = JACC.to_host(ret)[]
+        @test res ≈ 32.0
+    end
 end
 
 @testset "CG" begin
