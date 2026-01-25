@@ -7,7 +7,7 @@ on:
 jobs:
   RTXA4000:
     if: |
-      github.repository_owner == 'JuliaORNL' &&
+      github.repository_owner == 'JuliaGPU' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
@@ -93,7 +93,7 @@ jobs:
 
   GTX1080:
     if: |
-      github.repository_owner == 'JuliaORNL' &&
+      github.repository_owner == 'JuliaGPU' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'Test this please')
 
