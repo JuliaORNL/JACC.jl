@@ -2,16 +2,17 @@
 
 # JACC.jl: Julia for Accelerators
 
-[![Documentation](https://github.com/JuliaORNL/JACC.jl/actions/workflows/documentation.yaml/badge.svg)](https://juliaornl.github.io/JACC.jl)
-[![CI-CPU](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-cpu.yaml)
-[![CI-GPU-NVIDIA](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml)
-[![CI-GPU-AMD](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-AMD.yaml)
-[![CI-GPU-Apple](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml/badge.svg)](https://github.com/JuliaORNL/JACC.jl/actions/workflows/ci-gpu-Apple.yaml)
+[![Documentation](https://github.com/JuliaGPU/JACC.jl/actions/workflows/documentation.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/documentation.yaml)
+[![ci-cpu](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-cpu.yaml)
+[![ci-gpu-NVIDIA](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml)
+[![ci-gpu-AMD](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-AMD.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-AMD.yaml)
+[![ci-gpu-Apple](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-Apple.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-Apple.yaml)
+
 
 CPU/GPU portable `array`/`parallel_for`/`parallel_reduce` in Julia for productive science.
 
 JACC.jl leverages the LLVM-based Julia language and ecosystem, in particular [JuliaGPU](https://juliagpu.org/), and [optional package
-extensions](https://julialang.org/blog/2023/04/julia-1.9-highlights/#package_extensions). Similar to portable layers like Kokkos in C++, Julia users will have easy access to vendor-neutral CPU/GPU computing writing a single high-level source code, but in a language like Julia designed for science. 
+extensions](https://julialang.org/blog/2023/04/julia-1.9-highlights/#package_extensions). Similar to portable layers like Kokkos or SYCL in C++, Julia users will have easy access to vendor-neutral CPU/GPU computing writing a single high-level source code, but in a language like Julia designed for science. 
 
 JACC.jl programming model provides:
   
@@ -44,7 +45,6 @@ Julia provides a tight, interoperable ecosystem for GPU programming. Still, vend
 
 Roadmap:
 
-- JACC v1.0 stable API including `@parallel_for`/`@parallel_reduce` macros by early 2026.
 - JACC.BLAS for kernel-level linear algebra routines.
 - Expand JACC's ecosystem including scientific applications, see [JACC-Applications](https://github.com/JuliaORNL/JACC-applications)
 - New functionality impacting scientific users.
@@ -90,12 +90,12 @@ Roadmap:
     end
 
     N = 100_000
-    alpha = 2.0
+    alpha = Float32(2.0)
     x = JACC.zeros(Float32, N)
     y = JACC.array(fill(Float32(5), N))
-    JACC.parallel_for(N, axpy, alpha, x, y)
-    a = JACC.parallel_reduce(x)
-    println("Result: ", a)
+    JACC.@parallel_for range=N axpy(alpha, x, y)
+    sum_x = JACC.@parallel_reduce range=N ((i,x)->x[i])(x)
+    println("Result: ", sum_x)
     ```
 
     and run it:
@@ -115,7 +115,7 @@ Roadmap:
 
 ## Resources
 
-- Documentation: [https://juliaornl.github.io/JACC.jl](https://juliaornl.github.io/JACC.jl)
+- Documentation: [https://juliagpu.github.io/JACC.jl](https://juliagpu.github.io/JACC.jl)
 - For an app integration example see the [GrayScott.jl](https://github.com/JuliaORNL/GrayScott.jl) and the
   [Simulation.jl code](https://github.com/JuliaORNL/GrayScott.jl/blob/main/src/simulation/Simulation.jl) and search for the `JACC` keyword.
 - JuliaCon 2023 presentation [video](https://live.juliacon.org/talk/AY8EUX).
