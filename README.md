@@ -2,7 +2,7 @@
 
 # JACC.jl: Julia for Accelerators
 
-[![Documentation](https://github.com/JuliaGPU/JACC.jl/actions/workflows/documentation.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/documentation.yaml)
+[![Documentation](https://github.com/JuliaGPU/JACC.jl/actions/workflows/documentation.yaml/badge.svg)](https://juliagpu.github.io/JACC.jl)
 [![ci-cpu](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-cpu.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-cpu.yaml)
 [![ci-gpu-NVIDIA](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-NVIDIA.yaml)
 [![ci-gpu-AMD](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-AMD.yaml/badge.svg)](https://github.com/JuliaGPU/JACC.jl/actions/workflows/ci-gpu-AMD.yaml)
