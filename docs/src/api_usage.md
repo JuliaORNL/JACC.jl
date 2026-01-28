@@ -54,7 +54,7 @@ JACC.@init_backend
 
 ## Memory allocation
 
-- **`JACC.array{T}()`**: create a new array on the device with the specified type and size.
+- **`JACC.array()`**: create a new array on the device with the specified type and size.
 - **`JACC.zeros`**: create a new array on the device filled with zeros.
 - **`JACC.ones`**: create a new array on the device filled with ones.
 - **`JACC.fill`**: create a new array on the device filled with a specified value.
