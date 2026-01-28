@@ -18,3 +18,6 @@ docs/site/
 
 # Emacs temporary files
 *~
+
+# VSCode temporary files
+.vscode/
